@@ -1,16 +1,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
-#include <wiringPi.h>
 #include "MAX_30102.h"
-#include "mem_map.h"
 #include "i2c_utilities.h"
-
-extern MEM_MAP gpio_regs, i2c_regs;
-extern MEM_MAP vc_mem;
-
-extern FILE *fpData;
-extern char *dataFileName;
+#include "utilities.h"
 
 /* Check PART_ID register (0xFF should be 0x15) [file:1] */
 int max30102_check_id(uint8_t *part_id) {
@@ -69,8 +62,6 @@ int max30102_init_spo2_default(max30102_config_t config) {
         return ret;
     }
 
-    max30102_enable_all_interrupts();
-
     /* FIFO: 4x averaging, rollover enabled, interrupt when full */
     uint8_t fifo_config = (config.sample_avg << 5) | (config.fifo_rollover_en << 4) | (config.fifo_full_trigger);
     ret = max30102_reg_write(MAX30102_REG_FIFO_CONFIG, &fifo_config, 1);
@@ -124,12 +115,21 @@ int max30102_init_spo2_default(max30102_config_t config) {
         return REG_MODE_CONFIG_WRITE_ERROR;
     }
 
+    uint8_t v = 0x01;
+    ret = max30102_reg_write(MAX30102_REG_TEMP_CONFIG, &v, 1);
+    if (ret != 0) {
+        return REG_TEMP_CONFIG_WRITE_ERROR;
+    }
+
+    printf("Enabled Interrupts\r\n");
+    max30102_enable_all_interrupts();
+
     return 0;
 }
 
 /* One-shot die temperature read (float �C) [file:1] */
-int max30102_read_temperature(float *temp_c) {
-    if (!temp_c)
+int max30102_read_temperature(float *ptrTemp) {
+    if (!ptrTemp)
         return NULL_PTR_ERROR;
 
     int ret;
@@ -160,10 +160,15 @@ int max30102_read_temperature(float *temp_c) {
         }
     }
     printf("TEMP_CFG after wait: v=0x%02X tries_left=%d\n", v, tries);
+    return max30102_get_temperature(ptrTemp);
 
+    return 0;
+}
+
+int max30102_get_temperature(float *ptrTemp) {
     // 4) read integer and fraction
     uint8_t ti = 0, tf = 0;
-    ret = max30102_reg_read(MAX30102_REG_TEMP_INT, &ti, 1);
+    int ret = max30102_reg_read(MAX30102_REG_TEMP_INT, &ti, 1);
     printf("TINT ret=%d val=0x%02X\n", ret, ti);
     if (ret != 0) {
         return REG_TEMP_INT_READ_ERROR;
@@ -175,14 +180,11 @@ int max30102_read_temperature(float *temp_c) {
         return REG_TEMP_FRAC_READ_ERROR;
     }
 
-    int8_t ti_s = (int8_t)ti;
-    float frac = (tf >> 4) * 0.0625f;
-    *temp_c = (float)ti_s + frac;
-    printf("temp_c=%f\n", *temp_c);
+    *ptrTemp = ti + (tf >> 4) * 0.0625f;
+    printf("Temp=%f\n", *ptrTemp);
 
     return 0;
 }
-
 
 
 /* Clear FIFO pointers to 0 [file:1] */
@@ -216,8 +218,8 @@ int max30102_fifo_read_sample(uint32_t *red, uint32_t *ir) {
         return NULL_PTR_ERROR;
     }
 
-    uint8_t buf[6];
-    int ret = max30102_reg_read(MAX30102_REG_FIFO_DATA, buf, 6);
+    uint8_t buf[BYTESPERSAMPLE];
+    int ret = max30102_reg_read(MAX30102_REG_FIFO_DATA, buf, BYTESPERSAMPLE);
     if (ret != 0) {
         return REG_FIFO_DATA_READ_ERROR;
     }
@@ -325,7 +327,8 @@ int max30102_enable_all_interrupts(void) {
 
     if (max30102_set_bits(MAX30102_REG_INT_ENABLE1, MAX30102_INT_A_FULL_EN |
                 MAX30102_INT_PPG_RDY_EN |
-                MAX30102_INT_ALC_OVF_EN) < 0) {
+                MAX30102_INT_ALC_OVF_EN |
+                MAX30102_INT_PWR_RDY_EN) < 0) {
         return REG_INT_ENABLE1_SETBITS_ERROR;
     }
 
@@ -402,7 +405,7 @@ int max30102_get_interrupt_source(uint32_t *src_mask) {
     uint32_t mask = 0;
 
     if (!src_mask) {
-        return REG_INT_STATUS1_READ_ERROR;
+        return NULL_PTR_ERROR;
     }
 
     // Read and clear Interrupt Status 1 and 2.[file:1]
@@ -416,11 +419,25 @@ int max30102_get_interrupt_source(uint32_t *src_mask) {
         return REG_INT_STATUS2_READ_ERROR;
     }
 
-    if (s1 & (1u << 7)) mask |= MAX_INT_SRC_A_FULL;        // A_FULL[file:1]
-    if (s1 & (1u << 6)) mask |= MAX_INT_SRC_PPG_RDY;       // PPG_RDY[file:1]
-    if (s1 & (1u << 5)) mask |= MAX_INT_SRC_ALC_OVF;       // ALC_OVF[file:1]
-    if (s1 & (1u << 4)) mask |= MAX_INT_SRC_PWR_RDY;       // PWR_RDY[file:1]
-    if (s2 & (1u << 7)) mask |= MAX_INT_SRC_DIE_TEMP_RDY;  // DIE_TEMP_RDY[file:1]
+    if (s1 & MAX30102_INT_A_FULL_EN) {
+        mask |= MAX_INT_SRC_A_FULL;        // A_FULL[file:1]
+    }
+
+    if (s1 & MAX30102_INT_PPG_RDY_EN) {
+        mask |= MAX_INT_SRC_PPG_RDY;       // PPG_RDY[file:1]
+    }
+
+    if (s1 & MAX30102_INT_ALC_OVF_EN) {
+        mask |= MAX_INT_SRC_ALC_OVF;       // ALC_OVF[file:1]
+    }
+
+    if (s1 & MAX30102_INT_PWR_RDY_EN) {
+        mask |= MAX_INT_SRC_PWR_RDY;       // PWR_RDY[file:1]
+    }
+
+    if (s2 & MAX30102_INT_DIE_TEMP_RDY_EN) {
+        mask |= MAX_INT_SRC_DIE_TEMP_RDY;  // DIE_TEMP_RDY[file:1]
+    }
 
     // printf("MAX30102 interrupt source(s): %d\n", mask);
     *src_mask = mask;
@@ -462,8 +479,8 @@ int max30102_read_fifoRaw(uint8_t *sampleBuffer, int max_samples) {
     }
 
     for (int idx = 0; idx < available; idx++) {
-        ret = max30102_reg_read(MAX30102_REG_FIFO_DATA, sampleBuffer, 6);
-        sampleBuffer += 6;
+        ret = max30102_reg_read(MAX30102_REG_FIFO_DATA, sampleBuffer, BYTESPERSAMPLE);
+        sampleBuffer += BYTESPERSAMPLE;
         if (ret != 0) {
             return REG_FIFO_DATA_READ_ERROR;
         }
@@ -502,8 +519,8 @@ int max30102_read_all_fifo_if_ppg_ready(uint32_t int_src_mask,
     }
 
     for (int idx = 0; idx < available; idx++) {
-        uint8_t buf[6];
-        ret = max30102_reg_read(MAX30102_REG_FIFO_DATA, buf, 6);
+        uint8_t buf[BYTESPERSAMPLE];
+        ret = max30102_reg_read(MAX30102_REG_FIFO_DATA, buf, BYTESPERSAMPLE);
         if (ret != 0) {
             return REG_FIFO_DATA_READ_ERROR;
         }
@@ -513,7 +530,7 @@ int max30102_read_all_fifo_if_ppg_ready(uint32_t int_src_mask,
         // When does the read pointer overflow can we simulate it and read the pointer values
 
         red_buf[idx] = byte2Sample(buf);
-        ir_buf[idx] = byte2Sample(buf + 3);
+        ir_buf[idx] = byte2Sample(buf + BYTESPERLED);
 
         // printf(" Red and IR samples[%d](%d , %d), \r\n", idx, red_buf[idx], ir_buf[idx]);
     }
@@ -602,31 +619,4 @@ int max30102_test_fifo_reread_once(void) {
                red0, ir0, red0_r, ir0_r);
         return 1;
     }
-}
-
-void i2CHandler(int sig) {
-    switch(sig) {
-        case SIGINT:
-            printf("CTRL C. User Interrupt\r\n");
-            break;
-        default:
-            printf("DONE\r\n");
-            break;
-    }
-
-    wiringPiISRStop(MAX30102_INT_PIN);
-    max30102_disable_all_interrupts();
-    i2c_end();
-
-    unmap_periph_mem(&vc_mem);
-
-    unmap_periph_mem(&gpio_regs);
-    unmap_periph_mem(&i2c_regs);
-
-    if(fpData) {
-        fclose(fpData);
-        fpData = NULL;
-    }
-
-    exit(0);
 }

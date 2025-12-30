@@ -2,7 +2,6 @@
 #define MAX_30102_H
 
 #include <stdint.h>
-#include <signal.h>
 
 #define MAX30102_I2C_ADDR   0x57 
 #define MAX30102_INT_PIN    16
@@ -32,6 +31,8 @@
 #define MAX30102_REG_TEMP_CONFIG       0x21
 #define MAX30102_REG_REV_ID            0xFE
 #define MAX30102_REG_PART_ID           0xFF
+
+#define LEDCURRENT_MA(x)                ((uint8_t)(x/0.2))
 
 /* Expected PART_ID value (0x15) [file:1] */
 #define MAX30102_PART_ID_EXPECTED      0x15
@@ -122,7 +123,8 @@ typedef enum {
 #define MAX30102_INT_A_FULL_EN       0x80  // bit 7 INT_EN1
 #define MAX30102_INT_PPG_RDY_EN      0x40  // bit 6 INT_EN1
 #define MAX30102_INT_ALC_OVF_EN      0x20  // bit 5 INT_EN1
-#define MAX30102_INT_DIE_TEMP_RDY_EN 0x80  // bit 7 INT_EN2
+#define MAX30102_INT_PWR_RDY_EN      0x01  // bit 0 INT_EN1
+#define MAX30102_INT_DIE_TEMP_RDY_EN 0x02  // bit 2 INT_EN2
 
 // Bitmask for interrupt sources in our driver
 #define MAX_INT_SRC_A_FULL        (1u << 0)
@@ -190,11 +192,6 @@ typedef enum {
     NULL_PTR_ERROR = -50,
 } MAX30102_ERRORCode_t;
 
-typedef enum {
-    NOERROR=SIGINT+1,//SIGINT Ctrl C is reserved.
-    DONE,
-} TerminateError;
-
 /* Low-level hooks you already implemented (provided elsewhere) */
 int max30102_reg_write(uint8_t reg, const uint8_t *data, uint16_t len);
 int max30102_reg_read(uint8_t reg, uint8_t *data, uint16_t len);
@@ -204,6 +201,7 @@ int max30102_check_id(uint8_t *part_id);
 int max30102_reset(void);
 int max30102_init_spo2_default(max30102_config_t config);
 
+int max30102_get_temperature(float *ptrTemp);
 int max30102_read_temperature(float *temp_c);
 
 int max30102_fifo_clear(void);
@@ -233,5 +231,4 @@ int max30102_read_all_fifo_if_ppg_ready(uint32_t int_src_mask,
                                         uint32_t *ir_buf,
                                         int max_samples);
 int max30102_test_fifo_reread_once(void);
-void i2CHandler(int); 
 #endif /* MAX30102_H */
