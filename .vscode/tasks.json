@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "target",
+      "type": "promptString",
+      "description": "target to build",
+      "default": "ads1256dac8532"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "make",
+      "args": ["${input:target}"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}

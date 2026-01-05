@@ -1,4 +1,4 @@
-[irLED, redLED, config] = LoadSPO2Data('SPO2Data1767136580.dat', "L FF");
+[irLED, redLED, config] = LoadSPO2Data('SPO2Data1767585152.dat', "L FF");
 fs = config.sample_rate;
 ts = 1/fs;
 N = length(irLED);

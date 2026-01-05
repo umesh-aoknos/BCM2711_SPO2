@@ -1,0 +1,21 @@
+Dataprocessing/*.dat
+Dataprocessing/saveData/
+*DS_Store*
+# Ignore Vim swap, backup, and undo files
+*~
+*.swp
+*.swo
+*.un~
+
+# Files built by Visual Studio
+*_i.c
+*_p.c
+*_h.h
+._*.c
+._*.h
+
+# Ignore build files
+obj/*.o
+
+# Ignore pre-requistes
+obj/*.d

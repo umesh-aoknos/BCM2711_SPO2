@@ -38,6 +38,8 @@
 #define I2C_S_ERR      (1 << 8)   // ACK error
 #define I2C_S_RXD      (1 << 5)   // FIFO has data to read
 #define I2C_S_TXD      (1 << 4)   // FIFO can accept data
+#define I2C_S_RXR      (1 << 3)   // FIFO Needs reading. About to overflow
+#define I2C_S_TXW      (1 << 2)   // FIFO Needs writing. Too little Data
 #define I2C_S_DONE     (1 << 1)   // Transfer done
 #define I2C_S_TA       (1 << 0)   // Transfer active
 

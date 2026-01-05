@@ -1,8 +1,8 @@
 #include "MAX_30102.h"
 #include "i2c_utilities.h"
+#include "utilities.h"
 #include "gpio_utilities.h"
 #include "mem_map.h"
-
 
 extern MEM_MAP i2c_regs;
 
@@ -20,10 +20,6 @@ void i2c1_init(void) {
 
     // write back to control register
     *REG32(i2c_regs, I2C_C) |= (I2C_C_I2CEN | I2C_C_CLEAR);
-
-#ifdef I2C_ADD_DEBUG
-    printf("passed init, I2C_C = 0x%08X\n", *REG32(i2c_regs, I2C_C));
-#endif
 }
 
 /*
@@ -34,7 +30,7 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
     uint16_t remaining = len;
 
     if (len == 0)
-        return 0;
+        return NOERROR;
 
     *REG32(i2c_regs, I2C_A) = addr;
     *REG32(i2c_regs, I2C_DLEN) = len;
@@ -45,7 +41,8 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
     *REG32(i2c_regs, I2C_C) = I2C_C_CLEAR;
 
     // *** ADD THIS DELAY (10-50us) ***
-    for (volatile int i = 0; i < 100; i++);  // ~20�s on Pi @ 1GHz
+    // for (volatile int i = 0; i < 100; i++);  // ~20�s on Pi @ 1GHz
+    usleep(10);
 
     // Now preload FIFO
     // TXD will be set if FIFO Gets full
@@ -67,19 +64,27 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
         }
         if (*REG32(i2c_regs, I2C_S) & (I2C_S_ERR | I2C_S_CLKT)) {
             i2c1_clear_status();
-            return -1;
+            return I2C_WRITE_ERROR;
         }
     }
 
+
     i2c1_clear_status();
-    return (remaining == 0) ? 0 : -2;
+    if(remaining == 0) {
+        return NOERROR;
+    }
+    else {
+        return I2C_WRITE_REMNZ_ERROR;
+    }
+
+    // return (remaining == 0) ? NOERROR : I2C_WRITE_REMNZ_ERROR;
 }
 
 int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
     uint16_t remaining = len;
 
     if (len == 0)
-        return 0;
+        return NOERROR;
 
     // program register and data length
     *REG32(i2c_regs, I2C_A) = addr;
@@ -92,9 +97,10 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
     // start transfer (read)
     *REG32(i2c_regs, I2C_C) = I2C_C_I2CEN | I2C_C_CLEAR | I2C_C_ST | I2C_C_READ;
 
+    uint32_t status = *REG32(i2c_regs, I2C_S);
     // pull data from FIFO while data is available
     while (!(*REG32(i2c_regs, I2C_S) & I2C_S_DONE)) {
-        uint32_t status = *REG32(i2c_regs, I2C_S);
+        status = *REG32(i2c_regs, I2C_S);
         if ((remaining > 0) && (status & I2C_S_RXD)) {
             *buf++ = *REG8(i2c_regs, I2C_FIFO);
             remaining--;
@@ -103,14 +109,36 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
         if (status & (I2C_S_ERR | I2C_S_CLKT)) {
             // clear DONE/ERR/CLKT
             i2c1_clear_status();
-            return -1;
+            return I2C_READ_ERROR;
+        }
+    }
+
+    //i2c xfer complete. Continue emptying fifo till remaining = 0 or there's an error
+    while (remaining > 0) {
+        status = *REG32(i2c_regs, I2C_S);
+        if (status & I2C_S_RXD) {
+            *buf++ = *REG8(i2c_regs, I2C_FIFO);
+            remaining--;
+        }
+        // error?
+        if (status & (I2C_S_ERR | I2C_S_CLKT)) {
+            // clear DONE/ERR/CLKT
+            i2c1_clear_status();
+            return I2C_READ_ERROR;
         }
     }
 
     // clear DONE/ERR/CLKT
     i2c1_clear_status();
 
-    return (remaining == 0) ? 0 : -2;
+    if(remaining == 0) {
+        return NOERROR;
+    }
+    else {
+        return I2C_READ_REMNZ_ERROR;
+    }
+
+    // return (remaining == 0) ? NOERROR : I2C_READ_REMNZ_ERROR;
 }
 
 int i2c_config() {
@@ -120,7 +148,7 @@ int i2c_config() {
     gpio_mode(I2C0_SCL_PIN, GPIO_ALT0); // CE0
     gpio_set(MAX30102_INT_PIN, GPIO_IN, GPIO_PULLUP);
 
-    return 1; // OK
+    return NOERROR; // OK
 }
 
 

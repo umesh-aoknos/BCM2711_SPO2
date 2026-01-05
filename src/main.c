@@ -27,6 +27,7 @@ uint8_t pingpongBuffer[2][MAXNUMSAMPLES*BYTESPERSAMPLE];
 uint32_t pingpongBufferAvailable[2] = {0, 0};
 uint8_t pingpongIndex = PING;
 uint8_t rtcErrorFlag = 0;
+int32_t reasonCode = NOERROR;
 
 void max_30102_wiringPiISR() {
     static uint32_t state = 0;
@@ -70,7 +71,8 @@ void max_30102_wiringPiISR() {
 
         int numSamples = max30102_read_fifoRaw(curPtr, MAX30102_FIFO_LEN);
         if(numSamples < 0) {
-            terminate(READMAX30102_FIFO_ERROR);
+            printf("READMAX30102_FIFO_ERROR\r\n");
+            return;
         }
 
         //Updated write Pointer and available sample count
@@ -132,9 +134,15 @@ int main(int argc, char **argv) {
 
     if (!fpData) {
         fpData = fopen(dataFileName, "wb");
-        printf("Opening File %s. Result %d\r\n", dataFileName, (fpData == NULL));
+        if(fpData == NULL) {
+            printf("Error opening data file %s: %s\r\n", dataFileName, strerror(errno));
+            terminate(FILEOPENERROR);
+        }
+        else {
+            printf("Opening File %s. Result %d\r\n", dataFileName, (fpData == NULL));
+        }
     }
-    
+
     // Exception handling:ctrl + c
     signal(SIGINT, terminate);
 
@@ -173,6 +181,7 @@ int main(int argc, char **argv) {
     fwrite(&config, sizeof(max30102_config_t), 1, fpData);
     usleep(10000);
 
+    uint32_t writeCount = 0;
     while (1) {
         // Main processing / networking / logging, etc.
         if(rtcErrorFlag > 0) {
@@ -180,6 +189,8 @@ int main(int argc, char **argv) {
             uint32_t numSamples = pingpongBufferAvailable[pingpongIndex ^ 1];
             fwrite(sampleBuffer, sizeof(uint8_t), numSamples*BYTESPERSAMPLE, fpData);
             rtcErrorFlag--;
+            writeCount++;
+            printf("Write Count %d/%d secs\r\n", writeCount, duration);
             // printf("RTC Error %d\n", rtcErrorFlag);
         }
         else {
@@ -192,8 +203,10 @@ int main(int argc, char **argv) {
         elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;
         // Microseconds to milliseconds
         elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
-        printf("Elapsed time %4.1f/%d secs\r\n", elapsedTime/1000, duration);
-        if(elapsedTime > duration*1000) {
+        //printf("Elapsed time %4.1f/%d secs\r\n", elapsedTime/1000, duration);
+        //if(elapsedTime > duration*1000) {
+        if(writeCount >= duration) {
+            reasonCode = DONE;
             terminate(DONE);
         }
     }
