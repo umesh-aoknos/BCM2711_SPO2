@@ -113,6 +113,9 @@ typedef enum {
     MAX30102_MODE_SPO2    = 0x03   /* SpO2 (Red + IR) */
 } max30102_mode_t;
 
+// Temperature Enable
+#define MAX30102_TEMP_CONFIG_EN      0x01
+
 // Bit masks from datasheet
 #define MAX30102_INT_A_FULL_EN       0x80  // bit 7 INT_EN1
 #define MAX30102_INT_PPG_RDY_EN      0x40  // bit 6 INT_EN1
@@ -152,6 +155,7 @@ int max30102_check_id(uint8_t *part_id);
 int max30102_reset(void);
 int max30102_init_spo2_default(max30102_config_t config);
 
+int max30102_enable_temperature();
 int max30102_get_temperature(float *ptrTemp);
 int max30102_read_temperature(float *temp_c);
 

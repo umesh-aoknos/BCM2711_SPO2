@@ -26,7 +26,7 @@ LIB = -L$(SYS_LIB_PATH)  -lm -lwiringPi
 
 # Compilation flags
 DEBUG = -g -O0 -Wall
-CFLAGS += $(DEBUG) -I$(DIR_INC) -I$(SYS_INC_PATH) -MP -MMD -I$(UNITY_ROOT)/src
+CFLAGS += $(DEBUG) -I$(DIR_INC) -I$(SYS_INC_PATH) -MP -MMD
 
 # Default rule
 all: ${TARGET}
@@ -37,7 +37,7 @@ ${TARGET}: ${OBJS}
 
 # Compile source files
 ${DIR_OBJ}/%.o : $(DIR_SRC)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@ -DDEBUG_PIN
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # Clean target
 .PHONY: clean

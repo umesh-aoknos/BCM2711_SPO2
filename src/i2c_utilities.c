@@ -27,8 +27,6 @@ void i2c1_init(void) {
  * Returns 0 on success, negative on error.
  */
 int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
-    uint16_t remaining = len;
-
     if (len == 0)
         return NOERROR;
 
@@ -47,9 +45,11 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
     // Now preload FIFO
     // TXD will be set if FIFO Gets full
     // This can happen when len > FIFO length(16 bytes)
-    while (remaining && (*REG32(i2c_regs, I2C_S) & I2C_S_TXD)) {
+    uint32_t status = *REG32(i2c_regs, I2C_S);
+    while ((len > 0) && (status & I2C_S_TXD)) {
         *REG8(i2c_regs, I2C_FIFO) = *buf++;
-        remaining--;
+        len--;
+        status = *REG32(i2c_regs, I2C_S);
     }
 
     // Start transfer
@@ -57,32 +57,40 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
 
     // Loop till done
     // Wait till there is room in FIFO to resume xfer
-    while (!(*REG32(i2c_regs, I2C_S) & I2C_S_DONE)) {
-        if (remaining && (*REG32(i2c_regs, I2C_S) & I2C_S_TXD)) {
+    int loopCount = I2C_TIMEOUT;
+    status = *REG32(i2c_regs, I2C_S);
+
+    //Continue writing to fifo  as more room is made available till remaining = 0 or there's an error
+    // while (remaining > 0)
+    while (!(status & I2C_S_DONE)) {
+        if ((len > 0) && (status & I2C_S_TXD)) {
             *REG8(i2c_regs, I2C_FIFO) = *buf++;
-            remaining--;
+            len--;
+            //Reset timeout to wait for next write
+            loopCount = I2C_TIMEOUT;
         }
-        if (*REG32(i2c_regs, I2C_S) & (I2C_S_ERR | I2C_S_CLKT)) {
+
+        if (status & (I2C_S_ERR | I2C_S_CLKT)) {
             i2c1_clear_status();
             return I2C_WRITE_ERROR;
         }
+
+        if(loopCount-- < 0) {
+            return I2C_WRITE_TIMEOUT;
+        }
+        status = *REG32(i2c_regs, I2C_S);
     }
 
-
     i2c1_clear_status();
-    if(remaining == 0) {
+    if(len == 0) {
         return NOERROR;
     }
     else {
         return I2C_WRITE_REMNZ_ERROR;
     }
-
-    // return (remaining == 0) ? NOERROR : I2C_WRITE_REMNZ_ERROR;
 }
 
 int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
-    uint16_t remaining = len;
-
     if (len == 0)
         return NOERROR;
 
@@ -97,28 +105,17 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
     // start transfer (read)
     *REG32(i2c_regs, I2C_C) = I2C_C_I2CEN | I2C_C_CLEAR | I2C_C_ST | I2C_C_READ;
 
-    uint32_t status = *REG32(i2c_regs, I2C_S);
     // pull data from FIFO while data is available
-    while (!(*REG32(i2c_regs, I2C_S) & I2C_S_DONE)) {
-        status = *REG32(i2c_regs, I2C_S);
-        if ((remaining > 0) && (status & I2C_S_RXD)) {
-            *buf++ = *REG8(i2c_regs, I2C_FIFO);
-            remaining--;
-        }
-        // error?
-        if (status & (I2C_S_ERR | I2C_S_CLKT)) {
-            // clear DONE/ERR/CLKT
-            i2c1_clear_status();
-            return I2C_READ_ERROR;
-        }
-    }
-
+    int loopCount = I2C_TIMEOUT;
+    uint32_t status = *REG32(i2c_regs, I2C_S);
     //i2c xfer complete. Continue emptying fifo till remaining = 0 or there's an error
-    while (remaining > 0) {
-        status = *REG32(i2c_regs, I2C_S);
+    //while (!(status & I2C_S_DONE)) {
+    while(len > 0) {
         if (status & I2C_S_RXD) {
             *buf++ = *REG8(i2c_regs, I2C_FIFO);
-            remaining--;
+            len--;
+            //Reset timeout to wait for next read
+            loopCount = I2C_TIMEOUT;
         }
         // error?
         if (status & (I2C_S_ERR | I2C_S_CLKT)) {
@@ -126,12 +123,18 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
             i2c1_clear_status();
             return I2C_READ_ERROR;
         }
+
+        if(loopCount-- < 0) {
+            return I2C_READ_TIMEOUT;
+        }
+
+        status = *REG32(i2c_regs, I2C_S);
     }
 
     // clear DONE/ERR/CLKT
     i2c1_clear_status();
 
-    if(remaining == 0) {
+    if(len == 0) {
         return NOERROR;
     }
     else {

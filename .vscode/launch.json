@@ -9,6 +9,18 @@
             "type": "promptString",
             "description": "Duration (seconds) to pass to build task",
             "default": "2"
+        },
+        {
+            "id": "redLEDCurrent",
+            "type": "promptString",
+            "description": "Red LED Current (mA) to pass to build task",
+            "default": "25"
+        },
+        {
+            "id": "irLEDCurrent",
+            "type": "promptString",
+            "description": "IR LED Current (mA) to pass to build task",
+            "default": "25"
         }
     ],
     "configurations": [
@@ -18,7 +30,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/ads1256dac8532",
             "preLaunchTask": "build",
-            "args": ["${input:duration}"],
+            "args": ["${input:duration}", "${input:redLEDCurrent}", "${input:irLEDCurrent}"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

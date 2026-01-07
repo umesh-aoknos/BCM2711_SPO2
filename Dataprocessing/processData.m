@@ -1,4 +1,4 @@
-[irLED, redLED, config] = LoadSPO2Data('SPO2Data1767585152.dat', "L FF");
+[irLED, redLED, config] = LoadSPO2Data('SPO2Data1767684931.dat', "L FF");
 fs = config.sample_rate;
 ts = 1/fs;
 N = length(irLED);
@@ -12,7 +12,7 @@ sampleIdx = (settlingTime*fs:N);
 L = length(sampleIdx);
 mean_redLED = mean(redLED(sampleIdx));
 mean_irLED = mean(irLED(sampleIdx));
-axfig1 = plotyy(t(sampleIdx), irLED(sampleIdx)-mean_irLED, t(sampleIdx), redLED(sampleIdx)-mean_redLED);
+axfig1 = plotyy(t(sampleIdx), -(irLED(sampleIdx)-mean_irLED), t(sampleIdx), -(redLED(sampleIdx)-mean_redLED));
 xlabel('Time');
 ylabel(axfig1(1), 'IR LED');
 ylabel(axfig1(2), 'Red LED');

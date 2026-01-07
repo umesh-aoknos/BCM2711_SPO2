@@ -14,11 +14,7 @@
 #define I2C_ADDR_WRITE  0xAE
 #define I2C_ADDR_READ   0xAF
 
-
-
-//------------ Reg defs MLX30102 ----------------------- 
-#define MLX_30102_CHIP_ID_REG     0xFF
-
+#define I2C_TIMEOUT     1000000
 
 // ---------- BSC1 register offsets ----------
 #define I2C_C          0x00   // Control

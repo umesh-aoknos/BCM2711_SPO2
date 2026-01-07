@@ -5,6 +5,8 @@
 #include "i2c_utilities.h"
 #include "utilities.h"
 extern int32_t reasonCode;
+extern int32_t reasonCodeInner;
+
 /* Check PART_ID register (0xFF should be 0x15) [file:1] */
 int max30102_check_id(uint8_t *part_id) {
     uint8_t id;
@@ -22,8 +24,8 @@ int max30102_check_id(uint8_t *part_id) {
 
 /* Issue RESET bit in MODE_CONFIG and wait for it to clear [file:1] */
 int max30102_reset(void) {
-    uint8_t v = MAX30102_MODE_RESET;
-    int ret = max30102_reg_write(MAX30102_REG_MODE_CONFIG, &v, 1);
+    uint8_t regValue = MAX30102_MODE_RESET;
+    int ret = max30102_reg_write(MAX30102_REG_MODE_CONFIG, &regValue, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_MODE_CONFIG_WRITE_ERROR);
@@ -31,17 +33,17 @@ int max30102_reset(void) {
 
     /* Poll until RESET bit clears (simple, blocking) */
     do {
-        ret = max30102_reg_read(MAX30102_REG_MODE_CONFIG, &v, 1);
+        ret = max30102_reg_read(MAX30102_REG_MODE_CONFIG, &regValue, 1);
         if (ret != NOERROR) {
             reasonCode = ret;
             terminate(REG_MODE_CONFIG_READ_ERROR);
         }
-    } while (v & MAX30102_MODE_RESET);
+    } while (regValue & MAX30102_MODE_RESET);
     usleep(1000);
 
     /* Making Shutdown 0 so that we resume operation*/
-    uint8_t mode = 0x00;  // SHDN=0
-    ret = max30102_reg_write(MAX30102_REG_MODE_CONFIG, &mode, 1);
+    regValue = 0x00;  // SHDN=0
+    ret = max30102_reg_write(MAX30102_REG_MODE_CONFIG, &regValue, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_MODE_CONFIG_WRITE_ERROR);
@@ -59,6 +61,7 @@ int max30102_reset(void) {
  */
 int max30102_init_spo2_default(max30102_config_t config) {
     int ret;
+    uint8_t regValue;
 
     /* Reset first */
     ret = max30102_reset();
@@ -68,46 +71,46 @@ int max30102_init_spo2_default(max30102_config_t config) {
     }
 
     /* FIFO: 4x averaging, rollover enabled, interrupt when full */
-    uint8_t fifo_config = (config.sample_avg << 5) | (config.fifo_rollover_en << 4) | (config.fifo_full_trigger);
-    ret = max30102_reg_write(MAX30102_REG_FIFO_CONFIG, &fifo_config, 1);
+    regValue = (config.sample_avg << 5) | (config.fifo_rollover_en << 4) | (config.fifo_full_trigger);
+    ret = max30102_reg_write(MAX30102_REG_FIFO_CONFIG, &regValue, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_FIFO_CONFIG_WRITE_ERROR);
     }
 
     /* SpO2: 16�A range, 100sps, 411�s/18-bit pulses */
-    uint8_t spo2_config = (config.adc_range << 5) | (config.sample_rate << 2) | (config.pulse_width);
-    ret = max30102_reg_write(MAX30102_REG_SPO2_CONFIG, &spo2_config, 1);
+    regValue = (config.adc_range << 5) | (config.sample_rate << 2) | (config.pulse_width);
+    ret = max30102_reg_write(MAX30102_REG_SPO2_CONFIG, &regValue, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_SPO2_CONFIG_WRITE_ERROR);
     }
 
     /* LED currents: ~35mA each */
-    uint8_t led_current = config.redled_current;
-    ret = max30102_reg_write(MAX30102_REG_LED1_PA, &led_current, 1); //Red LED
+    regValue = config.redled_current;
+    ret = max30102_reg_write(MAX30102_REG_LED1_PA, &regValue, 1); //Red LED
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_LED1_PA_WRITE_ERROR);
     }
 
-    led_current = config.irled_current;
-    ret = max30102_reg_write(MAX30102_REG_LED2_PA, &led_current, 1);//IR LED
+    regValue = config.irled_current;
+    ret = max30102_reg_write(MAX30102_REG_LED2_PA, &regValue, 1);//IR LED
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_LED2_PA_WRITE_ERROR);
     }
 
     /* Multi-LED slots: SLOT1=Red, SLOT2=IR */
-    uint8_t slot = (config.slot2 << 4) | config.slot1;
-    ret = max30102_reg_write(MAX30102_REG_MULTI_LED_CTRL1, &slot, 1);
+    regValue = (config.slot2 << 4) | config.slot1;
+    ret = max30102_reg_write(MAX30102_REG_MULTI_LED_CTRL1, &regValue, 1);
     if (ret != 0) {
         reasonCode = ret;
         terminate(REG_MULTI_LED_CTRL1_WRITE_ERROR);
     }
 
-    slot = (config.slot4 << 4) | config.slot3;
-    ret = max30102_reg_write(MAX30102_REG_MULTI_LED_CTRL2, &slot, 1);
+    regValue = (config.slot4 << 4) | config.slot3;
+    ret = max30102_reg_write(MAX30102_REG_MULTI_LED_CTRL2, &regValue, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_MULTI_LED_CTRL2_WRITE_ERROR);
@@ -121,15 +124,15 @@ int max30102_init_spo2_default(max30102_config_t config) {
     }
 
     /* Enable SpO2 mode */
-    uint8_t mode = config.mode;
-    ret = max30102_reg_write(MAX30102_REG_MODE_CONFIG, &mode, 1);
+    regValue = config.mode;
+    ret = max30102_reg_write(MAX30102_REG_MODE_CONFIG, &regValue, 1);
     if (ret != 0) {
         reasonCode = ret;
         terminate(REG_MODE_CONFIG_WRITE_ERROR);
     }
 
-    uint8_t v = 0x01;
-    ret = max30102_reg_write(MAX30102_REG_TEMP_CONFIG, &v, 1);
+    regValue = MAX30102_TEMP_CONFIG_EN;
+    ret = max30102_reg_write(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_TEMP_CONFIG_WRITE_ERROR);
@@ -142,8 +145,18 @@ int max30102_init_spo2_default(max30102_config_t config) {
         terminate(REG_ENABLE_ALL_INTERRUPT_ERROR);
     }
 
-
     return NOERROR;
+}
+
+int max30102_enable_temperature() {
+    uint8_t regValue = MAX30102_TEMP_CONFIG_EN;
+    int ret = max30102_reg_read(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
+    if (ret != NOERROR) {
+        reasonCode = ret;
+        return REG_TEMP_CONFIG_READ_ERROR;
+    }
+    printf("TEMP_CFG before enabling: value=0x%02X\n", regValue);
+    return max30102_reg_write(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
 }
 
 /* One-shot die temperature read (float �C) [file:1] */
@@ -154,11 +167,11 @@ int max30102_read_temperature(float *ptrTemp) {
     }
 
     int ret;
-    uint8_t v;
+    uint8_t regValue;
 
     // 1) start conversion
-    v = 0x01;
-    ret = max30102_reg_write(MAX30102_REG_TEMP_CONFIG, &v, 1);
+    regValue = MAX30102_TEMP_CONFIG_EN;
+    ret = max30102_reg_write(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
 
     if (ret != NOERROR) {
         reasonCode = ret;
@@ -166,7 +179,7 @@ int max30102_read_temperature(float *ptrTemp) {
     }
 
     // 2) read back TEMP_CONFIG once
-    ret = max30102_reg_read(MAX30102_REG_TEMP_CONFIG, &v, 1);
+    ret = max30102_reg_read(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_TEMP_CONFIG_READ_ERROR);
@@ -174,21 +187,29 @@ int max30102_read_temperature(float *ptrTemp) {
 
     // 3) poll until TEMP_EN clears (add timeout)
     int tries = 0;
-    while ((v & 0x01) && tries++) {
-        ret = max30102_reg_read(MAX30102_REG_TEMP_CONFIG, &v, 1);
+    while ((regValue & MAX30102_TEMP_CONFIG_EN) && tries++) {
+        ret = max30102_reg_read(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
         if (ret != NOERROR) {
             reasonCode = ret;
             terminate(REG_TEMP_CONFIG_READ_ERROR);
         }
     }
-    printf("TEMP_CFG after wait: v=0x%02X tries=%d\n", v, tries);
+
+    printf("TEMP_CFG after wait: value=0x%02X tries=%d\n", regValue, tries);
     return max30102_get_temperature(ptrTemp);
 }
 
 int max30102_get_temperature(float *ptrTemp) {
+    uint8_t regValue;
+    int ret = max30102_reg_read(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
+    if (ret != NOERROR) {
+        reasonCode = ret;
+        terminate(REG_TEMP_CONFIG_READ_ERROR);
+    }
+
     // 4) read integer and fraction
     uint8_t ti = 0, tf = 0;
-    int ret = max30102_reg_read(MAX30102_REG_TEMP_INT, &ti, 1);
+    ret = max30102_reg_read(MAX30102_REG_TEMP_INT, &ti, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_TEMP_INT_READ_ERROR);
@@ -201,6 +222,7 @@ int max30102_get_temperature(float *ptrTemp) {
     }
 
     *ptrTemp = ti + (tf >> 4) * 0.0625f;
+    printf("get temp %d,0x%0X, %3.1f\r\n", ret, regValue, *ptrTemp);
 
     return NOERROR;
 }
@@ -294,7 +316,7 @@ static int max30102_set_bits(uint8_t reg, uint8_t mask) {
 
     int ret = max30102_reg_read(reg, &val, 1);
     if (ret != NOERROR) {
-		return(ret);
+        return(ret);
     }
 
     val |= mask;
@@ -380,7 +402,6 @@ int max30102_enable_all_interrupts(void) {
     }
 
     return NOERROR;
-
 }
 
 /* Combined: turn off all interrupts */
@@ -450,21 +471,24 @@ int max30102_get_interrupt_source(uint32_t *src_mask) {
     uint32_t mask = 0;
 
     if (!src_mask) {
+        reasonCodeInner = NULL_PTR_ERROR;
         reasonCode = NULL_PTR_ERROR;
-        terminate(NULL_PTR_ERROR);
+        return NULL_PTR_ERROR;
     }
 
     // Read and clear Interrupt Status 1 and 2.[file:1]
     ret = max30102_reg_read(MAX30102_REG_INT_STATUS1, &s1, 1);
     if (ret != NOERROR) {
+        reasonCodeInner = ret;
         reasonCode = ret;
-        terminate(REG_INT_STATUS1_READ_ERROR);
+        return REG_INT_STATUS1_READ_ERROR;
     }
 
     ret = max30102_reg_read(MAX30102_REG_INT_STATUS2, &s2, 1);
     if (ret != NOERROR) {
+        reasonCodeInner = ret;
         reasonCode = ret;
-        terminate(REG_INT_STATUS2_READ_ERROR);
+        return REG_INT_STATUS2_READ_ERROR;
     }
 
     if (s1 & MAX30102_INT_A_FULL_EN) {
@@ -508,19 +532,23 @@ int max30102_read_fifoRaw(uint8_t *sampleBuffer, int max_samples) {
     ret = max30102_reg_read(MAX30102_REG_FIFO_WR_PTR, &wr_ptr, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
-        terminate(REG_FIFO_WR_PTR_READ_ERROR);
+        reasonCodeInner = ret;
+        return REG_FIFO_WR_PTR_READ_ERROR;
     }
 
     ret = max30102_reg_read(MAX30102_REG_FIFO_RD_PTR, &rd_ptr, 1);
     if (ret != NOERROR) {
         reasonCode = ret;
-        terminate(REG_FIFO_RD_PTR_READ_ERROR);
+        reasonCodeInner = ret;
+        return REG_FIFO_RD_PTR_READ_ERROR;
     }
 
     // Compute number of unread samples (modulo 32 depth).[file:1]
     uint8_t available = (wr_ptr - rd_ptr + MAX30102_FIFO_LEN) % MAX30102_FIFO_LEN;
 
     if (available == 0) {
+        reasonCode = NOERROR;
+        reasonCodeInner = NOERROR;
         return 0;
     }
 
@@ -532,10 +560,14 @@ int max30102_read_fifoRaw(uint8_t *sampleBuffer, int max_samples) {
         ret = max30102_reg_read(MAX30102_REG_FIFO_DATA, sampleBuffer, BYTESPERSAMPLE);
         sampleBuffer += BYTESPERSAMPLE;
         if (ret != NOERROR) {
-            reasonCode = ret;
-            terminate(REG_FIFO_DATA_READ_ERROR);
+            reasonCodeInner = ret;
+            reasonCode = REG_FIFO_DATA_READ_ERROR;
+            return REG_FIFO_DATA_READ_ERROR;
         }
     }
+
+    reasonCode = NOERROR;
+    reasonCodeInner = NOERROR;
     return available;
 }
 // Read up to 'max_samples' from FIFO when PPG_RDY interrupt is present.

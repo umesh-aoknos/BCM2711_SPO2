@@ -68,6 +68,9 @@ typedef enum {
     MAX30102_READ_SET_BITS_ERROR = -49,
     FILEOPENERROR = -50,
     REG_ENABLE_ALL_INTERRUPT_ERROR = -51,
+    MAX30102_GET_INTERRUPT_SRC_ERROR = -52,
+    I2C_READ_TIMEOUT = -53,
+    I2C_WRITE_TIMEOUT = -54,
 } TerminateError;
 
 const char *getErrStr(int err);

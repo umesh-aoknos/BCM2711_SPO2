@@ -8,11 +8,20 @@ extern MEM_MAP gpio_regs, i2c_regs;
 extern MEM_MAP vc_mem;
 
 extern FILE *fpData;
-extern char *dataFileName;
-extern uint8_t rtcErrorFlag, pingpongIndex;
-extern uint8_t pingpongBuffer[2][MAXNUMSAMPLES*BYTESPERSAMPLE];
-extern uint32_t pingpongBufferAvailable[2];
+extern FILE *fpTemp;
 
+extern uint8_t rtcErrorFlag, pingpongDataIndex;
+extern uint8_t pingpongDataBuffer[2][MAXNUMSAMPLES*BYTESPERSAMPLE];
+extern uint32_t pingpongDataBufferAvailable[2];
+
+extern float pingpongTempBuffer[2][MAXNUMSAMPLES];
+extern uint32_t pingpongTempBufferAvailable[2];
+extern uint8_t pingpongTempIndex;
+extern uint8_t tempErrorFlag;
+
+extern int32_t reasonCode;
+extern int32_t reasonCodeISR;
+extern int32_t reasonCodeInner;
 const char *getErrStr(int err) {
     const char *msg;
     switch (err) {
@@ -29,19 +38,22 @@ const char *getErrStr(int err) {
             msg = "I2C Write Error";
             break;
         case I2C_WRITE_REMNZ_ERROR:
-            msg = "I2C Write Error";
+            msg = "I2C NZ Write Error";
             break;
         case I2C_READ_REMNZ_ERROR:
-            msg = "I2C Read Error";
+            msg = "I2C NZ Read Error";
             break;
         case READMAX30102_FIFO_ERROR:
             msg = "MAX30102 FIFO Error";
             break;
+        case REG_FIFO_DATA_READ_ERROR:
+            msg = "FIFO_DATA read failed";
+            break;
         case REG_FIFO_DATA_WRITE_ERROR:
-            msg = "PART ID mismatch";
+            msg = "FIFO DATA write failed";
             break;
         case REG_PART_ID_READ_ERROR:
-            msg = "PART ID mismatch";
+            msg = "FIFO DATA read failed";
             break;
         case PART_ID_ERROR:
             msg = "PART ID mismatch";
@@ -91,9 +103,6 @@ const char *getErrStr(int err) {
         case REG_OVF_COUNTER_WRITE_ERROR:
             msg = "OVF_COUNTER write failed";
             break;
-        case REG_FIFO_DATA_READ_ERROR:
-            msg = "FIFO_DATA read failed";
-            break;
         case REG_INT_STATUS1_READ_ERROR:
             msg = "INT_STATUS1 read failed";
             break;
@@ -130,6 +139,15 @@ const char *getErrStr(int err) {
         case REG_ENABLE_ALL_INTERRUPT_ERROR:
             msg = "Enable Interrupts error";
             break;
+        case MAX30102_GET_INTERRUPT_SRC_ERROR:
+            msg = "Get Interrupt source error";
+            break;
+        case I2C_READ_TIMEOUT:
+            msg = "I2C Read Timeout error";
+            break;
+        case I2C_WRITE_TIMEOUT:
+            msg = "I2C Write Timeout error";
+            break;
         default:
             msg = "Unknown error";
             break;
@@ -137,12 +155,12 @@ const char *getErrStr(int err) {
     return msg;
 }
 
-extern int32_t reasonCode;
 void terminate(int err) {
     const char *msgErr = getErrStr(err);
     const char *msgReason = getErrStr(reasonCode);
+    const char *msgInner = getErrStr(reasonCodeInner);
 
-    printf("Exiting due to %d(reason:%d, %s) %s\r\n", err, reasonCode, msgReason, msgErr);
+    printf("Exiting due to %d(reason:%d, %s. Inner Reason:%d, %s) %s\r\n", err, reasonCode, msgReason, reasonCodeInner, msgInner, msgErr);
     //Disable Interrupts
     //Stop ISR
     wiringPiISRStop(MAX30102_INT_PIN);
@@ -162,17 +180,28 @@ void terminate(int err) {
     unmap_periph_mem(&i2c_regs);
     printf("unmapeed I2C Regs\r\n");
 
-    uint8_t *sampleBuffer = pingpongBuffer[pingpongIndex];
-    uint32_t numSamples = pingpongBufferAvailable[pingpongIndex];
-    printf(" RTC %d. Flush Data from buffer %d. Num Samples %d. Sample[0]%d\r\n", rtcErrorFlag, pingpongIndex, pingpongBufferAvailable[pingpongIndex], sampleBuffer[0]);
+    uint8_t *sampleBuffer = pingpongDataBuffer[pingpongDataIndex];
+    uint32_t numSamples = pingpongDataBufferAvailable[pingpongDataIndex];
+    printf(" RTC %d. Flush Data from data buffer %d. Num Samples %d. Sample[0]%d\r\n", rtcErrorFlag, pingpongDataIndex, pingpongDataBufferAvailable[pingpongDataIndex], sampleBuffer[0]);
     fwrite(sampleBuffer, sizeof(uint8_t), numSamples*BYTESPERSAMPLE, fpData);
     printf("Data flushed\r\n");
+
+    float *tempBuffer = pingpongTempBuffer[pingpongTempIndex];
+    numSamples = pingpongTempBufferAvailable[pingpongTempIndex];
+    printf(" Temp %d. Flush Data from temp buffer %d. Num Samples %d. Sample[0]%f\r\n", tempErrorFlag, pingpongTempIndex, pingpongTempBufferAvailable[pingpongTempIndex], tempBuffer[0]);
+    fwrite(tempBuffer, sizeof(float), numSamples, fpTemp);
+    printf("Temp flushed\r\n");
 
     if(fpData) {
         fclose(fpData);
         fpData = NULL;
     }
-    printf("pingpong flushed and fpData closed. Exiting\r\n");
+
+    if(fpTemp) {
+        fclose(fpTemp);
+        fpTemp = NULL;
+    }
+    printf("pingpong flushed and fpData/fpTemp closed. Exiting\r\n");
 
     exit(0);
 }
