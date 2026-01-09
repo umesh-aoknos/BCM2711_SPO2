@@ -71,8 +71,13 @@ typedef enum {
     MAX30102_GET_INTERRUPT_SRC_ERROR = -52,
     I2C_READ_TIMEOUT = -53,
     I2C_WRITE_TIMEOUT = -54,
+    RTC_ERROR = -55,
+    ARGCREADERROR = -56,
 } TerminateError;
 
+max30102_sample_rate_t intToSampleRate(long intArg);
+BCM2711_i2c_clockfreq_t intToI2CFreq(long intArg);
+const char* BCM2711_i2c_clockfreq_to_string(BCM2711_i2c_clockfreq_t freq);
 const char *getErrStr(int err);
 void terminate(int); 
 #endif

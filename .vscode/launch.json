@@ -21,6 +21,19 @@
             "type": "promptString",
             "description": "IR LED Current (mA) to pass to build task",
             "default": "25"
+        },
+
+        {
+            "id": "sampleRate",
+            "type": "promptString",
+            "description": "LED Sample Rate (SPS) to pass to build task",
+            "default": "50"
+        },
+        {
+            "id": "i2cFreq",
+            "type": "promptString",
+            "description": "I2C Frequency (kHz) to pass to build task",
+            "default": "100"
         }
     ],
     "configurations": [
@@ -30,7 +43,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/ads1256dac8532",
             "preLaunchTask": "build",
-            "args": ["${input:duration}", "${input:redLEDCurrent}", "${input:irLEDCurrent}"],
+            "args": ["${input:duration}", "${input:redLEDCurrent}", "${input:irLEDCurrent}", "${input:sampleRate}", "${input:i2cFreq}"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

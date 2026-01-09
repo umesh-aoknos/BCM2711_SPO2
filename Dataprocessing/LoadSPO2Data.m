@@ -1,7 +1,11 @@
-function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement)
+function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement, saveTextFlag)
     if(nargin == 1)
         sensorPlacement = "L FF";
+        saveTextFlag = 0;
+    elseif(nargin == 2)
+        saveTextFlag = 0;
     end
+
     GlobalDefines
     fid = fopen(FileName, "r");
     %%Read Config
@@ -32,4 +36,8 @@ function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement)
     %% redLED = B(3,:)*2^16 + B(2,:)*2^8 + B(1,:);
     %% irLED = B(6,:)*2^16 + B(5,:)*2^8 + B(4,:);
     fclose(fid);
+
+    if(saveTextFlag == 1)
+        saveDataTextFile(FileName, irLED, redLED, config);
+    end
 end

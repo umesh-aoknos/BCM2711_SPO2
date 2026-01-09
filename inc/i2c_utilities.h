@@ -22,6 +22,9 @@
 #define I2C_DLEN       0x08   // Data length
 #define I2C_A          0x0C   // Slave address
 #define I2C_FIFO       0x10   // Data FIFO
+#define I2C_CDIV       0x14   // Clock Divider 150MHz/CDIV
+#define I2C_DDLY       0x18   // Data Delay
+#define I2C_CLKT       0x1C   // Clock Stretch Timeout
 
 // ---------- Control register bits ----------
 #define I2C_C_I2CEN    (1 << 15)  // I2C enable
@@ -39,16 +42,25 @@
 #define I2C_S_DONE     (1 << 1)   // Transfer done
 #define I2C_S_TA       (1 << 0)   // Transfer active
 
+typedef enum {
+    I2C_400KHz = 0x0177,
+    I2C_200KHz = 0x02EE,
+    I2C_100KHz = 0x05DC,
+    I2C_50KHz  = 0x0BB8,
+    I2C_25KHz  = 0x1770,
+    I2C_10KHz  = 0x3A98,
+} BCM2711_i2c_clockfreq_t;
 // ---------- External mapping for BSC1 ----------
 
 // ---------- API ----------
+/* Utility: convert BCM2711_i2c_clockfreq_t to human-readable string */
 void i2c1_clear_status(void);
 void i2c1_init(void);
 
 int  i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len);
 int  i2c1_read (uint8_t addr, uint8_t *buf, uint16_t len);
 
-int  i2c_config(void);   // configure GPIO pins to ALT0
+int  i2c_config(BCM2711_i2c_clockfreq_t i2c_freq);   // configure GPIO pins to ALT0
 void i2c_end(void);     // restore GPIO pins to input
 int max30102_read_chip_id(uint8_t *chip_id);
 void i2c1_add_mapper(void);

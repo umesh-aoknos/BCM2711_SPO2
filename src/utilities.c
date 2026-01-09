@@ -8,20 +8,92 @@ extern MEM_MAP gpio_regs, i2c_regs;
 extern MEM_MAP vc_mem;
 
 extern FILE *fpData;
-extern FILE *fpTemp;
 
 extern uint8_t rtcErrorFlag, pingpongDataIndex;
 extern uint8_t pingpongDataBuffer[2][MAXNUMSAMPLES*BYTESPERSAMPLE];
 extern uint32_t pingpongDataBufferAvailable[2];
 
+#ifdef TEMPLOG
+extern FILE *fpTemp;
 extern float pingpongTempBuffer[2][MAXNUMSAMPLES];
 extern uint32_t pingpongTempBufferAvailable[2];
 extern uint8_t pingpongTempIndex;
 extern uint8_t tempErrorFlag;
+#endif
 
 extern int32_t reasonCode;
 extern int32_t reasonCodeISR;
 extern int32_t reasonCodeInner;
+
+BCM2711_i2c_clockfreq_t intToI2CFreq(long intArg) {
+    BCM2711_i2c_clockfreq_t i2c_freq = I2C_10KHz;
+    if(intArg < 15) {
+        i2c_freq = I2C_10KHz;
+    }
+    else if(intArg < 40) {
+        i2c_freq = I2C_25KHz;
+    }
+    else if(intArg < 75) {
+        i2c_freq = I2C_50KHz;
+    }
+    else if(intArg < 150) {
+        i2c_freq = I2C_100KHz;
+    }
+    else if(intArg < 300){  
+        i2c_freq = I2C_200KHz;
+    }
+    else {
+        i2c_freq = I2C_200KHz;
+    }
+    return i2c_freq;
+}
+
+max30102_sample_rate_t intToSampleRate(long intArg) {
+    max30102_sample_rate_t fsamp;
+    if(intArg < 75) {
+        fsamp = MAX30102_SR_50_SPS;
+    }
+    else if(intArg < 150) {
+        fsamp = MAX30102_SR_100_SPS;
+    }
+    else if(intArg < 300) {
+        fsamp = MAX30102_SR_200_SPS;
+    }
+    else if(intArg < 600) {
+        fsamp = MAX30102_SR_400_SPS;
+    }
+    else if(intArg < 1300){  
+        fsamp = MAX30102_SR_1000_SPS;
+    }
+    else if(intArg < 2400) {
+        fsamp = MAX30102_SR_1600_SPS;
+    }
+    else {
+        fsamp = MAX30102_SR_3200_SPS;
+    }
+    return fsamp;
+}
+
+/* Convert BCM2711_i2c_clockfreq_t enum to string */
+const char* BCM2711_i2c_clockfreq_to_string(BCM2711_i2c_clockfreq_t freq) {
+    switch (freq) {
+        case I2C_400KHz:
+            return "400 kHz";
+        case I2C_200KHz:
+            return "200 kHz";
+        case I2C_100KHz:
+            return "100 kHz";
+        case I2C_50KHz:
+            return "50 kHz";
+        case I2C_25KHz:
+            return "25 kHz";
+        case I2C_10KHz:
+            return "10 kHz";
+        default:
+            return "Unknown I2C frequency";
+    }
+}
+
 const char *getErrStr(int err) {
     const char *msg;
     switch (err) {
@@ -148,6 +220,9 @@ const char *getErrStr(int err) {
         case I2C_WRITE_TIMEOUT:
             msg = "I2C Write Timeout error";
             break;
+        case ARGCREADERROR:
+            msg = "Input argument read error";
+            break;
         default:
             msg = "Unknown error";
             break;
@@ -186,21 +261,26 @@ void terminate(int err) {
     fwrite(sampleBuffer, sizeof(uint8_t), numSamples*BYTESPERSAMPLE, fpData);
     printf("Data flushed\r\n");
 
+#ifdef TEMPLOG
     float *tempBuffer = pingpongTempBuffer[pingpongTempIndex];
     numSamples = pingpongTempBufferAvailable[pingpongTempIndex];
     printf(" Temp %d. Flush Data from temp buffer %d. Num Samples %d. Sample[0]%f\r\n", tempErrorFlag, pingpongTempIndex, pingpongTempBufferAvailable[pingpongTempIndex], tempBuffer[0]);
     fwrite(tempBuffer, sizeof(float), numSamples, fpTemp);
     printf("Temp flushed\r\n");
+#endif
 
     if(fpData) {
         fclose(fpData);
         fpData = NULL;
     }
 
+#ifdef TEMPLOG
     if(fpTemp) {
         fclose(fpTemp);
         fpTemp = NULL;
     }
+#endif
+
     printf("pingpong flushed and fpData/fpTemp closed. Exiting\r\n");
 
     exit(0);

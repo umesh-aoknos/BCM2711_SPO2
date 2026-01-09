@@ -144,12 +144,15 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
     // return (remaining == 0) ? NOERROR : I2C_READ_REMNZ_ERROR;
 }
 
-int i2c_config() {
+int i2c_config(BCM2711_i2c_clockfreq_t i2c_freq) {
     /* Set the SPI0 pins to the Alt 0 function to enable SPI0 access on them */
 
     gpio_mode(I2C0_SDA_PIN, GPIO_ALT0); // CE1
     gpio_mode(I2C0_SCL_PIN, GPIO_ALT0); // CE0
     gpio_set(MAX30102_INT_PIN, GPIO_IN, GPIO_PULLUP);
+
+    //Set I2C Clock
+    *REG32(i2c_regs, I2C_CDIV) = i2c_freq;
 
     return NOERROR; // OK
 }

@@ -80,7 +80,7 @@ typedef enum {
     MAX30102_SR_800_SPS   = 0x04,  /* 800 samples/sec */
     MAX30102_SR_1000_SPS  = 0x05,  /* 1000 samples/sec */
     MAX30102_SR_1600_SPS  = 0x06,  /* 1600 samples/sec */
-    MAX30102_SR_3200_SPS  = 0x07   /* 3200 samples/sec */
+    MAX30102_SR_3200_SPS  = 0x07,  /* 3200 samples/sec */
 } max30102_sample_rate_t;
 
 /* SPO2_CONFIG (0x0A) - LED_PW[1:0] [file:1] */
@@ -186,4 +186,6 @@ int max30102_read_all_fifo_if_ppg_ready(uint32_t int_src_mask,
                                         uint32_t *ir_buf,
                                         int max_samples);
 int max30102_test_fifo_reread_once(void);
+/* Utility function to convert sample rate enum to string */
+const char* max30102_sample_rate_to_string(max30102_sample_rate_t rate);
 #endif /* MAX30102_H */

@@ -222,7 +222,7 @@ int max30102_get_temperature(float *ptrTemp) {
     }
 
     *ptrTemp = ti + (tf >> 4) * 0.0625f;
-    printf("get temp %d,0x%0X, %3.1f\r\n", ret, regValue, *ptrTemp);
+    // printf("get temp %d,0x%0X, %3.1f\r\n", ret, regValue, *ptrTemp);
 
     return NOERROR;
 }
@@ -712,5 +712,29 @@ int max30102_test_fifo_reread_once(void) {
                "S0(RED=%u IR=%u) vs S0_r(RED=%u IR=%u)\n",
                red0, ir0, red0_r, ir0_r);
         return -1;
+    }
+}
+
+/* Convert sample rate enum to string representation */
+const char* max30102_sample_rate_to_string(max30102_sample_rate_t rate) {
+    switch (rate) {
+        case MAX30102_SR_50_SPS:
+            return "50 SPS";
+        case MAX30102_SR_100_SPS:
+            return "100 SPS";
+        case MAX30102_SR_200_SPS:
+            return "200 SPS";
+        case MAX30102_SR_400_SPS:
+            return "400 SPS";
+        case MAX30102_SR_800_SPS:
+            return "800 SPS";
+        case MAX30102_SR_1000_SPS:
+            return "1000 SPS";
+        case MAX30102_SR_1600_SPS:
+            return "1600 SPS";
+        case MAX30102_SR_3200_SPS:
+            return "3200 SPS";
+        default:
+            return "Unknown Sample Rate";
     }
 }
