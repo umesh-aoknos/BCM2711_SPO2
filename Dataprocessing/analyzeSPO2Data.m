@@ -2,6 +2,7 @@ function analyzeSPO2Data(irLED, redLED, config, skipSamplesDur)
     if(nargin == 3)
         skipSamplesDur = 0;%%sec
     end
+    reflected = 1;
     fs = config.sample_rate;
     ts = 1/fs;
     N = length(irLED);
@@ -17,9 +18,15 @@ function analyzeSPO2Data(irLED, redLED, config, skipSamplesDur)
     mean_redLED = mean(redLED(skipIndexRange));
     mean_irLED = mean(irLED(skipIndexRange));
 
-    irLEDmod = irLED(skipIndexRange) - mean_irLED;
-    redLEDmod = redLED(skipIndexRange) - mean_redLED;
+    if(reflected)
+        irLEDmod = mean_irLED -irLED(skipIndexRange);
+        redLEDmod = mean_redLED - redLED(skipIndexRange);
+    else
+        irLEDmod = irLED(skipIndexRange) - mean_irLED;
+        redLEDmod = redLED(skipIndexRange) - mean_redLED;
+    end
     
+    figure(1)
     axfig1 = plotyy(tmod, irLEDmod, tmod, redLEDmod);
     xlabel('Time');
     ylabel(axfig1(1), 'IR LED');
@@ -29,7 +36,7 @@ function analyzeSPO2Data(irLED, redLED, config, skipSamplesDur)
     title(titleStr)
     grid
     
-    figure
+    figure(2)
     NFFT = 1024;
     F = (0:NFFT-1)*fs*60/NFFT;%%bpm
     irLEDFreqMag = abs(fft(irLEDmod, NFFT));

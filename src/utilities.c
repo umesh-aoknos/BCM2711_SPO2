@@ -240,7 +240,9 @@ void terminate(int err) {
     //Stop ISR
     wiringPiISRStop(MAX30102_INT_PIN);
     printf("ISR Stopped\r\n");
-    max30102_disable_all_interrupts();
+    if(err != PART_ID_ERROR) {
+        max30102_disable_all_interrupts();
+    }
     printf("Disabled Interrupts\r\n");
 
     i2c_end();

@@ -1,4 +1,6 @@
 Dataprocessing/*.dat
+Dataprocessing/*.jpg
+Dataprocessing/*.txt
 Dataprocessing/saveData/
 *DS_Store*
 # Ignore Vim swap, backup, and undo files
@@ -19,3 +21,6 @@ obj/*.o
 
 # Ignore pre-requistes
 obj/*.d
+
+# Ignore VSCode smbdelete files
+.smbdelete*

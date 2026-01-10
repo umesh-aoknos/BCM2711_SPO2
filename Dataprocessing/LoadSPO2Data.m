@@ -11,7 +11,13 @@ function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement, saveT
     %%Read Config
     config = struct(); % Initialize an empty structure
     % Read the config fields
-    config.sample_avg = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_AVG);
+    config.version = MAX30102GetConfig(fread(fid, 1, 'uint16'), VERSION)
+    if(!(config.version  > 32767)) % If version is negative, it's old format
+        fseek(fid, 0, 'bof'); 
+    else
+        config.i2c_freq = MAX30102GetConfig(fread(fid, 1, 'uint16'), I2C_FREQ)
+    end
+    config.sample_avg = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_AVG)
     config.fifo_rollover_en = MAX30102GetConfig(fread(fid, 1, 'uint8'), ROLLOVER_EN);
     config.fifo_full_trigger = MAX30102GetConfig(fread(fid, 1, 'uint8'), FIFO_FULL_TRIGGER);
     config.sample_rate = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_RATE);
@@ -26,6 +32,9 @@ function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement, saveT
     config.mode = MAX30102GetConfig(fread(fid, 1, 'uint8'), MODE);
 
     config.sensorPlacement = sensorPlacement;
+    if(config.version  > 32767) % If version is present then adjust for struct size align (18byts vs 17bytes of info)
+        dummy = fread(fid, 1, 'uint8');
+    end
 
     %%Read Red/IR Sample Data
     A = fread(fid, Inf, 'uint8');

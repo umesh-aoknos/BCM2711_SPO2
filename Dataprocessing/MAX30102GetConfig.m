@@ -1,6 +1,14 @@
 function parsedValue = MAX30102GetConfig(val, field)
     GlobalDefines
     switch (field)
+        case VERSION
+            if(val == 0xFFFF)
+                parsedValue = -1; % Indicate old format
+            else
+                parsedValue = val;
+            end
+        case I2C_FREQ
+            parsedValue = 150e6 /(val*1e3);%%150MHz/CDIV
         case SAMPLE_AVG
             parsedValue = 2^val;
         case SAMPLE_RATE

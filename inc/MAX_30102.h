@@ -131,6 +131,8 @@ typedef enum {
 #define MAX_INT_SRC_DIE_TEMP_RDY  (1u << 4)
 
 typedef struct {
+    uint16_t version;
+    uint16_t i2c_freq;
     uint8_t sample_avg;
     uint8_t fifo_rollover_en;
     uint8_t fifo_full_trigger;

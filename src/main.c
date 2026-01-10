@@ -44,7 +44,7 @@ volatile int32_t reasonCodeISR = NOERROR;
 uint8_t deviceReadyForTempMeasurement = 0;
 //Note ISR Cannot terminate. Needs to return with Code for main loop to process and terminate
 void max_30102_wiringPiISR() {
-    static uint8_t deviceReadyForMeasurement = 0;
+    static uint8_t deviceReadyForMeasurement = 1;
     uint32_t src;
 
     int ret = max30102_get_interrupt_source(&src);
@@ -125,7 +125,7 @@ void max_30102_wiringPiISR() {
 
         // You can trigger max30102_read_temperature() here if desired.[file:1]
         ret = max30102_get_temperature(&MAX30102_dieTemp);
-        printf("Got Temp Interrupt and Temp Data %d,%f\r\n", ret, MAX30102_dieTemp);
+        // printf("Got Temp Interrupt and Temp Data %d,%f\r\n", ret, MAX30102_dieTemp);
         if(ret == NOERROR) {
             *curPtr = MAX30102_dieTemp;
             //Updated write Pointer and available sample count
@@ -173,42 +173,43 @@ int main(int argc, char **argv) {
 
     float irLEDCurrent=25, redLEDCurrent=25; //mA
     max30102_sample_rate_t fsamp = MAX30102_SR_50_SPS;
-    BCM2711_i2c_clockfreq_t i2c_freq = I2C_10KHz;
+    BCM2711_i2c_clockfreq_t i2c_freq = I2C_100KHz;
     
     char *endptr;//strtol, strtof error handling
     switch(argc) {
         case 6:
             i2c_freq = intToI2CFreq(strtol(argv[5], &endptr, 10));
-            printf("Error reading i2c_freq: %s\r\n", strerror(errno));
             if(errno) {
+                printf("Error reading i2c_freq: %s\r\n", strerror(errno));
                 terminate(ARGCREADERROR);
             }
         case 5:
             fsamp = intToSampleRate(strtol(argv[4], &endptr, 10));
-            printf("Error reading fsamp: %s\r\n", strerror(errno));
             if(errno) {
+                printf("Error reading fsamp: %s\r\n", strerror(errno));
                 terminate(ARGCREADERROR);
             }
         case 4:
             irLEDCurrent = strtof(argv[3], &endptr);
-            printf("Error reading irLEDCurrent: %s\r\n", strerror(errno));
             if(errno) {
+                printf("Error reading irLEDCurrent: %s\r\n", strerror(errno));
                 terminate(ARGCREADERROR);
             }
         case 3:
             redLEDCurrent = strtof(argv[2], &endptr);
-            printf("Error reading redLEDCurrent: %s\r\n", strerror(errno));
             if(errno) {
+                printf("Error reading redLEDCurrent: %s\r\n", strerror(errno));
                 terminate(ARGCREADERROR);
             }
         case 2:
             duration = strtol(argv[1], &endptr, 10);
-            printf("Error reading duration: %s\r\n", strerror(errno));
             if(errno) {
+                printf("Error reading duration: %s\r\n", strerror(errno));
                 terminate(ARGCREADERROR);
             }
             break;
         default:
+            printf("Using Default Params\r\n");
             break;
     }
 
@@ -254,13 +255,15 @@ int main(int argc, char **argv) {
     wiringPiISR(MAX30102_INT_PIN, INT_EDGE_FALLING, &max_30102_wiringPiISR);
 
     printf("MAX30102 ISR attached on GPIO16. Main loop free to run.\n");
-    printf("=== MAX30102 Write Test ===\n");
 
     max30102_check_id(&chip_id);
 
     printf("PART_ID(0xFF): 0x%02X\n", chip_id);  // Expect 0x15
 
+    uint16_t configVersion = 0x8000 |0x0001; //Version 1
     max30102_config_t config = {
+        configVersion,
+        i2c_freq,
         MAX30102_SMP_AVE_1,
         1,
         0x0F,

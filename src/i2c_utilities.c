@@ -152,7 +152,7 @@ int i2c_config(BCM2711_i2c_clockfreq_t i2c_freq) {
     gpio_set(MAX30102_INT_PIN, GPIO_IN, GPIO_PULLUP);
 
     //Set I2C Clock
-    *REG32(i2c_regs, I2C_CDIV) = i2c_freq;
+    //*REG32(i2c_regs, I2C_CDIV) = i2c_freq;
 
     return NOERROR; // OK
 }
