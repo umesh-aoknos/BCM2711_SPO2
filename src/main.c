@@ -35,7 +35,7 @@ uint32_t pingpongTempBufferAvailable[2] = {0, 0};
 uint8_t pingpongTempIndex = PING;
 uint8_t tempErrorFlag = 0;
 #endif
-float MAX30102_dieTemp;
+float MAX30102_dieTemp = 0.0;
 
 volatile int32_t reasonCode = NOERROR;
 volatile int32_t reasonCodeInner = NOERROR;
@@ -44,7 +44,8 @@ volatile int32_t reasonCodeISR = NOERROR;
 uint8_t deviceReadyForTempMeasurement = 0;
 //Note ISR Cannot terminate. Needs to return with Code for main loop to process and terminate
 void max_30102_wiringPiISR() {
-    static uint8_t deviceReadyForMeasurement = 1;
+    //Don't set deviceReadyForMeasurement to 1 without updating fwrite for max30102_config_t
+    static uint8_t deviceReadyForMeasurement = 0;
     uint32_t src;
 
     int ret = max30102_get_interrupt_source(&src);
@@ -277,11 +278,11 @@ int main(int argc, char **argv) {
         LEDCURRENT_MA(redLEDCurrent), //mA
         LEDCURRENT_MA(irLEDCurrent), //mA
         MAX30102_MODE_SPO2,
+        MAX30102_dieTemp,
     };
 
     max30102_init_spo2_default(config);
 
-    fwrite(&config, sizeof(max30102_config_t), 1, fpData);
     usleep(10000);
 
     while (1) {
@@ -316,8 +317,10 @@ int main(int argc, char **argv) {
 
         if(deviceReadyForTempMeasurement) {
             deviceReadyForTempMeasurement = 0;
+            config.dieTemp = MAX30102_dieTemp;
+            fwrite(&config, sizeof(max30102_config_t), 1, fpData);
             //int ret = max30102_enable_temperature();
-            printf("Got Die Temp Data %3.1f\r\n", MAX30102_dieTemp);
+            printf("Got Die Temp Data %3.1f, size %lu\r\n", MAX30102_dieTemp, sizeof(max30102_config_t));
         }
 
 #ifdef DEBUG_LOOP_CNT

@@ -146,6 +146,7 @@ typedef struct {
     uint8_t redled_current;
     uint8_t irled_current;
     uint8_t mode;
+    float dieTemp;
 } max30102_config_t;
 
 /* Low-level hooks you already implemented (provided elsewhere) */

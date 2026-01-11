@@ -12,9 +12,11 @@ function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement, saveT
     config = struct(); % Initialize an empty structure
     % Read the config fields
     config.version = MAX30102GetConfig(fread(fid, 1, 'uint16'), VERSION)
-    if(!(config.version  > 32767)) % If version is negative, it's old format
+    if((config.version  < 32769)) % If version is negative, it's old format
         fseek(fid, 0, 'bof'); 
+        config.version = 0;
     else
+        config.version = config.version - 32768;
         config.i2c_freq = MAX30102GetConfig(fread(fid, 1, 'uint16'), I2C_FREQ)
     end
     config.sample_avg = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_AVG)
@@ -30,10 +32,10 @@ function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement, saveT
     config.redled_current = MAX30102GetConfig(fread(fid, 1, 'uint8'), REDLED_CUR);
     config.irled_current = MAX30102GetConfig(fread(fid, 1, 'uint8'), IRLED_CUR);
     config.mode = MAX30102GetConfig(fread(fid, 1, 'uint8'), MODE);
-
     config.sensorPlacement = sensorPlacement;
-    if(config.version  > 32767) % If version is present then adjust for struct size align (18byts vs 17bytes of info)
-        dummy = fread(fid, 1, 'uint8');
+    if(config.version  > 0) % If version is present then adjust for struct size align (18byts vs 17bytes of info)
+        dummy = fread(fid, 3, 'uint8');%%Read dummy to align with dieTemp
+        config.dieTemp = fread(fid, 1, 'float');
     end
 
     %%Read Red/IR Sample Data

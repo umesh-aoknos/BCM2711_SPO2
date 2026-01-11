@@ -32,7 +32,11 @@ function analyzeSPO2Data(irLED, redLED, config, skipSamplesDur)
     ylabel(axfig1(1), 'IR LED');
     ylabel(axfig1(2), 'Red LED');
     legend('IR LED', 'RED LED')
-    titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d",config.sensorPlacement, fs,config.redled_current,config.redled_current,config.pulse_width);
+    if(config.version > 0)
+        titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, Die Temp=%2.1f(C)",config.sensorPlacement, fs,config.redled_current,config.redled_current,config.pulse_width, config.dieTemp);
+    else
+        titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d.",config.sensorPlacement, fs,config.redled_current,config.redled_current,config.pulse_width);
+    end
     title(titleStr)
     grid
     

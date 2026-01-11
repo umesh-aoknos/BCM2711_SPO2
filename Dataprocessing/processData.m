@@ -1,7 +1,7 @@
 %% FileName = "saveData/SPO2Data_30s10mA.dat";
 %% FileName = "SPO2Data1768021089.dat";
-FileName = "SPO2Data1768028213.dat";
-sensorPlacement = "Long L WT";
+FileName = "SPO2Data1768107699.dat";
+sensorPlacement = "Long L FF";
 saveTextFlag = 0;
 [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement, saveTextFlag);
 skipSamplesDur = 0.25;
