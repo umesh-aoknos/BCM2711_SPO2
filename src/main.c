@@ -56,11 +56,11 @@ void max_30102_wiringPiISR() {
     }
 
     // React to other interrupt sources:
-    if (src & MAX_INT_SRC_PPG_RDY) {
+    if (src & MAX30102_INT_PPG_RDY_EN) {
         // printf("Reacting to PPG Ready Interrupt\r\n");
     }
 
-    if ((src & MAX_INT_SRC_A_FULL) && deviceReadyForMeasurement) {
+    if ((src & MAX30102_INT_A_FULL_EN) && deviceReadyForMeasurement) {
         // FIFO almost full maybe increase read rate or log
         // Process n samples in red_samples[0..n-1], ir_samples[0..n-1]
         // e.g., push into your DSP / DMA pipeline
@@ -96,12 +96,12 @@ void max_30102_wiringPiISR() {
         pingpongDataBufferAvailable[pingpongDataIndex] += numSamples;
     }
 
-    if (src & MAX_INT_SRC_ALC_OVF) {
+    if (src & MAX30102_INT_ALC_OVF_EN) {
         // Ambient light overflow consider adjusting LED current or placement
         // printf("Reacting to AMBIENT LIGHT OVERFLOW\r\n");
     }
 
-    if (src & MAX_INT_SRC_DIE_TEMP_RDY) {
+    if (src & MAX30102_INT_DIE_TEMP_RDY_EN) {
         deviceReadyForMeasurement = 1;
         deviceReadyForTempMeasurement = 1;
 #ifdef TEMPLOG
@@ -133,14 +133,18 @@ void max_30102_wiringPiISR() {
             pingpongTempBufferAvailable[pingpongTempIndex] += 1;
         }
         else {
-            reasonCode = ret;;
-            reasonCodeISR = ret;;
+            reasonCode = ret;
+            reasonCodeISR = ret;
             return;
         }
 #else
         ret = max30102_get_temperature(&MAX30102_dieTemp);
-        // printf("Got Temp Interrupt and Temp Data %d,%3.1f\r\n", ret, MAX30102_dieTemp);
+        printf("Got Temp Interrupt and Temp Data %d,%3.1f\r\n", ret, MAX30102_dieTemp);
 #endif
+    }
+
+    if (src & MAX30102_INT_PWR_RDY_EN) {
+        printf("Reacting to Power Ready Interrupt\r\n");
     }
 }
 

@@ -122,13 +122,8 @@ typedef enum {
 #define MAX30102_INT_ALC_OVF_EN      0x20  // bit 5 INT_EN1
 #define MAX30102_INT_PWR_RDY_EN      0x01  // bit 0 INT_EN1
 #define MAX30102_INT_DIE_TEMP_RDY_EN 0x02  // bit 2 INT_EN2
-
-// Bitmask for interrupt sources in our driver
-#define MAX_INT_SRC_A_FULL        (1u << 0)
-#define MAX_INT_SRC_PPG_RDY       (1u << 1)
-#define MAX_INT_SRC_ALC_OVF       (1u << 2)
-#define MAX_INT_SRC_PWR_RDY       (1u << 3)
-#define MAX_INT_SRC_DIE_TEMP_RDY  (1u << 4)
+#define MAX30102_INT_STAT_REG1_MASK  0xE1  // INT_STARAGE1_REG Mask 11100001b
+#define MAX30102_INT_STAT_REG2_MASK  0x02  // INT_STARAGE2_REG Mask 00000010b
 
 typedef struct {
     uint16_t version;
@@ -176,8 +171,8 @@ int max30102_enable_a_full_int(void);
 int max30102_enable_ppg_rdy_int(void);
 int max30102_enable_alc_ovf_int(void);
 int max30102_enable_die_temp_rdy_int(void);
-int max30102_enable_all_interrupts(void);
-int max30102_disable_all_interrupts(void);
+int max30102_enable_interrupts(uint8_t mask);
+int max30102_disable_interrupts(uint8_t mask);
 int max30102_print_interrupt_source(void);
 int max30102_get_interrupt_source(uint32_t *src_mask);
 

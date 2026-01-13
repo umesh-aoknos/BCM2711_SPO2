@@ -138,24 +138,26 @@ int max30102_init_spo2_default(max30102_config_t config) {
         terminate(REG_TEMP_CONFIG_WRITE_ERROR);
     }
 
-    printf("Enabled Interrupts\r\n");
-    ret = max30102_enable_all_interrupts();
+    regValue = 
+        MAX30102_INT_A_FULL_EN |
+        MAX30102_INT_PPG_RDY_EN |
+        MAX30102_INT_ALC_OVF_EN |
+        MAX30102_INT_PWR_RDY_EN
+        | MAX30102_INT_DIE_TEMP_RDY_EN
+        ;
+
+    ret = max30102_enable_interrupts(regValue);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_ENABLE_ALL_INTERRUPT_ERROR);
     }
+    printf("Enabled Interrupts\r\n");
 
     return NOERROR;
 }
 
 int max30102_enable_temperature() {
     uint8_t regValue = MAX30102_TEMP_CONFIG_EN;
-    int ret = max30102_reg_read(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
-    if (ret != NOERROR) {
-        reasonCode = ret;
-        return REG_TEMP_CONFIG_READ_ERROR;
-    }
-    printf("TEMP_CFG before enabling: value=0x%02X\n", regValue);
     return max30102_reg_write(MAX30102_REG_TEMP_CONFIG, &regValue, 1);
 }
 
@@ -370,7 +372,7 @@ int max30102_enable_die_temp_rdy_int(void) {
 }
 
 /* Combined: turn on all interrupts */
-int max30102_enable_all_interrupts(void) {
+int max30102_enable_interrupts(uint8_t mask) {
     uint8_t dummy;
 
     // Clear any pending interrupts first (read status 1 & 2).[file:1]
@@ -386,16 +388,13 @@ int max30102_enable_all_interrupts(void) {
         return REG_INT_STATUS2_READ_ERROR;
     }
 
-    ret = max30102_set_bits(MAX30102_REG_INT_ENABLE1, MAX30102_INT_A_FULL_EN |
-                MAX30102_INT_PPG_RDY_EN |
-                MAX30102_INT_ALC_OVF_EN |
-                MAX30102_INT_PWR_RDY_EN);
+    ret = max30102_set_bits(MAX30102_REG_INT_ENABLE1, mask&MAX30102_INT_STAT_REG1_MASK);
     if (ret != NOERROR) {
         reasonCode = ret;
         return REG_INT_ENABLE1_SETBITS_ERROR;
     }
 
-    ret = max30102_set_bits(MAX30102_REG_INT_ENABLE2, MAX30102_INT_DIE_TEMP_RDY_EN);
+    ret = max30102_set_bits(MAX30102_REG_INT_ENABLE2, mask&MAX30102_INT_STAT_REG2_MASK);
     if (ret != NOERROR) {
         reasonCode = ret;
         return REG_INT_ENABLE2_SETBITS_ERROR;
@@ -405,17 +404,14 @@ int max30102_enable_all_interrupts(void) {
 }
 
 /* Combined: turn off all interrupts */
-int max30102_disable_all_interrupts(void) {
-    // uint8_t mask = ~(uint8_t )((uint8_t )MAX30102_INT_A_FULL_EN | (uint8_t )MAX30102_INT_PPG_RDY_EN | (uint8_t )MAX30102_INT_ALC_OVF_EN);
-    uint8_t mask = (MAX30102_INT_A_FULL_EN | MAX30102_INT_PPG_RDY_EN | MAX30102_INT_ALC_OVF_EN | MAX30102_INT_PWR_RDY_EN);
-    int ret = max30102_clr_bits(MAX30102_REG_INT_ENABLE1, mask);
+int max30102_disable_interrupts(uint8_t mask) {
+    int ret = max30102_clr_bits(MAX30102_REG_INT_ENABLE1, mask & MAX30102_INT_STAT_REG1_MASK);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_INT_ENABLE1_CLRBITS_ERROR);
     }
 
-    mask = MAX30102_INT_DIE_TEMP_RDY_EN;
-    ret = max30102_clr_bits(MAX30102_REG_INT_ENABLE2, mask);
+    ret = max30102_clr_bits(MAX30102_REG_INT_ENABLE2, mask & MAX30102_INT_STAT_REG2_MASK);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_INT_ENABLE2_CLRBITS_ERROR);
@@ -491,24 +487,26 @@ int max30102_get_interrupt_source(uint32_t *src_mask) {
         return REG_INT_STATUS2_READ_ERROR;
     }
 
+    //Note we are still checking individual sources and updating the mask
+    //as reserved fields in Status Reg1 and Status Reg2 could corrupt the mask
     if (s1 & MAX30102_INT_A_FULL_EN) {
-        mask |= MAX_INT_SRC_A_FULL;        // A_FULL[file:1]
+        mask |= MAX30102_INT_A_FULL_EN;        // A_FULL[file:1]
     }
 
     if (s1 & MAX30102_INT_PPG_RDY_EN) {
-        mask |= MAX_INT_SRC_PPG_RDY;       // PPG_RDY[file:1]
+        mask |= MAX30102_INT_PPG_RDY_EN;       // PPG_RDY[file:1]
     }
 
     if (s1 & MAX30102_INT_ALC_OVF_EN) {
-        mask |= MAX_INT_SRC_ALC_OVF;       // ALC_OVF[file:1]
+        mask |= MAX30102_INT_ALC_OVF_EN;       // ALC_OVF[file:1]
     }
 
     if (s1 & MAX30102_INT_PWR_RDY_EN) {
-        mask |= MAX_INT_SRC_PWR_RDY;       // PWR_RDY[file:1]
+        mask |= MAX30102_INT_PWR_RDY_EN;       // PWR_RDY[file:1]
     }
 
     if (s2 & MAX30102_INT_DIE_TEMP_RDY_EN) {
-        mask |= MAX_INT_SRC_DIE_TEMP_RDY;  // DIE_TEMP_RDY[file:1]
+        mask |= MAX30102_INT_DIE_TEMP_RDY_EN;  // DIE_TEMP_RDY[file:1]
     }
 
     // printf("MAX30102 interrupt source(s): %d\n", mask);

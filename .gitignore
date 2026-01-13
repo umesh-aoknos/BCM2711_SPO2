@@ -15,6 +15,7 @@ Dataprocessing/saveData/
 *_h.h
 ._*.c
 ._*.h
+._Makefile
 
 # Ignore build files
 obj/*.o

@@ -241,7 +241,15 @@ void terminate(int err) {
     wiringPiISRStop(MAX30102_INT_PIN);
     printf("ISR Stopped\r\n");
     if(err != PART_ID_ERROR) {
-        max30102_disable_all_interrupts();
+        uint8_t intMask = 
+            MAX30102_INT_A_FULL_EN |
+            MAX30102_INT_PPG_RDY_EN |
+            MAX30102_INT_ALC_OVF_EN |
+            MAX30102_INT_PWR_RDY_EN
+            | MAX30102_INT_DIE_TEMP_RDY_EN
+            ;
+
+        max30102_disable_interrupts(intMask);
     }
     printf("Disabled Interrupts\r\n");
 
