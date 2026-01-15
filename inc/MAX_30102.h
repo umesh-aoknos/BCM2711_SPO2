@@ -167,6 +167,8 @@ int max30102_reg_read(uint8_t reg, uint8_t *data, uint16_t len);
 // static int max30102_set_bits(uint8_t reg, uint8_t mask);
 
 // Interrupt Functions
+int max30102_set_bits(uint8_t reg, uint8_t mask);
+int max30102_clr_bits(uint8_t reg, uint8_t mask);
 int max30102_enable_a_full_int(void);
 int max30102_enable_ppg_rdy_int(void);
 int max30102_enable_alc_ovf_int(void);

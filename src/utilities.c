@@ -15,10 +15,6 @@ extern uint32_t pingpongDataBufferAvailable[2];
 
 #ifdef TEMPLOG
 extern FILE *fpTemp;
-extern float pingpongTempBuffer[2][MAXNUMSAMPLES];
-extern uint32_t pingpongTempBufferAvailable[2];
-extern uint8_t pingpongTempIndex;
-extern uint8_t tempErrorFlag;
 #endif
 
 extern int32_t reasonCode;
@@ -61,6 +57,9 @@ max30102_sample_rate_t intToSampleRate(long intArg) {
     }
     else if(intArg < 600) {
         fsamp = MAX30102_SR_400_SPS;
+    }
+    else if(intArg < 900) {
+        fsamp = MAX30102_SR_800_SPS;
     }
     else if(intArg < 1300){  
         fsamp = MAX30102_SR_1000_SPS;
@@ -253,6 +252,9 @@ void terminate(int err) {
     }
     printf("Disabled Interrupts\r\n");
 
+    //Shut Down MAX 30102
+    max30102_set_bits(MAX30102_REG_MODE_CONFIG, MAX30102_MODE_SHDN);
+
     i2c_end();
     printf("i2C GPIO Stopped\r\n");
 
@@ -270,14 +272,6 @@ void terminate(int err) {
     printf(" RTC %d. Flush Data from data buffer %d. Num Samples %d. Sample[0]%d\r\n", rtcErrorFlag, pingpongDataIndex, pingpongDataBufferAvailable[pingpongDataIndex], sampleBuffer[0]);
     fwrite(sampleBuffer, sizeof(uint8_t), numSamples*BYTESPERSAMPLE, fpData);
     printf("Data flushed\r\n");
-
-#ifdef TEMPLOG
-    float *tempBuffer = pingpongTempBuffer[pingpongTempIndex];
-    numSamples = pingpongTempBufferAvailable[pingpongTempIndex];
-    printf(" Temp %d. Flush Data from temp buffer %d. Num Samples %d. Sample[0]%f\r\n", tempErrorFlag, pingpongTempIndex, pingpongTempBufferAvailable[pingpongTempIndex], tempBuffer[0]);
-    fwrite(tempBuffer, sizeof(float), numSamples, fpTemp);
-    printf("Temp flushed\r\n");
-#endif
 
     if(fpData) {
         fclose(fpData);

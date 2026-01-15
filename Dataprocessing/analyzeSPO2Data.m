@@ -1,4 +1,4 @@
-function analyzeSPO2Data(irLED, redLED, config, skipSamplesDur)
+function analyzeSPO2Data(irLED, redLED, Temp, config, skipSamplesDur)
     if(nargin == 3)
         skipSamplesDur = 0;%%sec
     end
@@ -54,4 +54,12 @@ function analyzeSPO2Data(irLED, redLED, config, skipSamplesDur)
     xlabel('Freq (bmp)')
     legend('IR LED', 'RED LED')
     grid
+
+    if(!isempty(Temp))
+        figure(3)
+        plot(Temp)
+        ylabel('Temp C\deg');
+        title('Temperature');
+        grid
+    end
 end

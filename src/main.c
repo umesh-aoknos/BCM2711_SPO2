@@ -30,10 +30,6 @@ uint8_t rtcErrorFlag = 0;
 
 #ifdef TEMPLOG
 FILE *fpTemp = NULL;
-float pingpongTempBuffer[2][MAXNUMSAMPLES];
-uint32_t pingpongTempBufferAvailable[2] = {0, 0};
-uint8_t pingpongTempIndex = PING;
-uint8_t tempErrorFlag = 0;
 #endif
 float MAX30102_dieTemp = 0.0;
 
@@ -61,18 +57,36 @@ void max_30102_wiringPiISR() {
     }
 
     if ((src & MAX30102_INT_A_FULL_EN) && deviceReadyForMeasurement) {
+        ret = max30102_disable_interrupts(MAX30102_INT_A_FULL_EN);
+        if(ret != NOERROR) {
+            reasonCodeISR = REG_ENABLE_ALL_INTERRUPT_ERROR;
+            reasonCode = ret;
+            return;
+        }
         // FIFO almost full maybe increase read rate or log
         // Process n samples in red_samples[0..n-1], ir_samples[0..n-1]
         // e.g., push into your DSP / DMA pipeline
 
         uint32_t numAvailableSamples = pingpongDataBufferAvailable[pingpongDataIndex];
         uint8_t *curPtr = NULL;
-        if((MAXNUMSAMPLES - numAvailableSamples) > MAX30102_FIFO_LEN*BYTESPERSAMPLE) {
+        if((MAXNUMSAMPLES - numAvailableSamples) > MAX30102_FIFO_LEN) {
             //stay on current buffer
             curPtr = pingpongDataBuffer[pingpongDataIndex] + numAvailableSamples*BYTESPERSAMPLE;
         }
         else {
             //switch buffer
+            ret = max30102_get_temperature(&MAX30102_dieTemp);
+            if(ret != NOERROR) {
+                reasonCodeISR = REG_TEMP_INT_READ_ERROR;
+                reasonCode = ret;
+                return;
+            }
+            ret = max30102_enable_temperature();
+            if(ret != NOERROR) {
+                reasonCodeISR = REG_TEMP_CONFIG_WRITE_ERROR;
+                reasonCode = ret;
+                return;
+            }
             rtcErrorFlag++;
             // printf("Current buffer %d has %d samples\r\n", pingpongDataIndex, pingpongDataBufferAvailable[pingpongDataIndex]);
             pingpongDataIndex ^= 1;
@@ -94,6 +108,12 @@ void max_30102_wiringPiISR() {
 
         //Updated write Pointer and available sample count
         pingpongDataBufferAvailable[pingpongDataIndex] += numSamples;
+        ret = max30102_enable_interrupts(MAX30102_INT_A_FULL_EN);
+        if(ret != NOERROR) {
+            reasonCodeISR = REG_ENABLE_ALL_INTERRUPT_ERROR;
+            reasonCode = ret;
+            return;
+        }
     }
 
     if (src & MAX30102_INT_ALC_OVF_EN) {
@@ -103,44 +123,15 @@ void max_30102_wiringPiISR() {
 
     if (src & MAX30102_INT_DIE_TEMP_RDY_EN) {
         deviceReadyForMeasurement = 1;
-        deviceReadyForTempMeasurement = 1;
-#ifdef TEMPLOG
-        uint32_t numAvailableSamples = pingpongTempBufferAvailable[pingpongTempIndex];
-        float *curPtr = NULL;
-        if((MAXNUMSAMPLES - numAvailableSamples) > sizeof(float)) {
-            //stay on current buffer
-            curPtr = pingpongTempBuffer[pingpongTempIndex] + numAvailableSamples;
-        }
-        else {
-            //switch buffer
-            tempErrorFlag++;
-            if(tempErrorFlag > 1) {
-                printf("Temp RTC Error %d\n", tempErrorFlag);
-            }
-            pingpongTempIndex ^= 1;
-
-            //Switch Buffer,reset write Pointer and available sample count
-            curPtr = pingpongTempBuffer[pingpongTempIndex];
-            pingpongTempBufferAvailable[pingpongTempIndex] = 0;
-        }
-
-        // You can trigger max30102_read_temperature() here if desired.[file:1]
-        ret = max30102_get_temperature(&MAX30102_dieTemp);
-        // printf("Got Temp Interrupt and Temp Data %d,%f\r\n", ret, MAX30102_dieTemp);
-        if(ret == NOERROR) {
-            *curPtr = MAX30102_dieTemp;
-            //Updated write Pointer and available sample count
-            pingpongTempBufferAvailable[pingpongTempIndex] += 1;
-        }
-        else {
+        deviceReadyForTempMeasurement = 0;
+        ret = max30102_disable_interrupts(MAX30102_INT_DIE_TEMP_RDY_EN);
+        if(ret != NOERROR) {
+            reasonCodeISR = REG_ENABLE_ALL_INTERRUPT_ERROR;
             reasonCode = ret;
-            reasonCodeISR = ret;
             return;
         }
-#else
-        ret = max30102_get_temperature(&MAX30102_dieTemp);
-        printf("Got Temp Interrupt and Temp Data %d,%3.1f\r\n", ret, MAX30102_dieTemp);
-#endif
+        // ret = max30102_get_temperature(&MAX30102_dieTemp);
+        // printf("Got Temp Interrupt and Temp Data %d,%3.1f\r\n", ret, MAX30102_dieTemp);
     }
 
     if (src & MAX30102_INT_PWR_RDY_EN) {
@@ -149,6 +140,7 @@ void max_30102_wiringPiISR() {
 }
 
 int main(int argc, char **argv) {
+    int prevquant_t = -1;
     uint32_t duration = 10;//Seconds
     struct timeval t1;
     // Start timer
@@ -219,9 +211,9 @@ int main(int argc, char **argv) {
     }
 
 #ifdef DEBUG_LOOP_CNT
-    printf("Executing Debug Count Loop %s %d %f(redLEDCurrent)%d %f(irLEDCurrent)%d fsamp: %s i2c_freq: %s\r\n", argv[0], duration, irLEDCurrent, LEDCURRENT_MA(irLEDCurrent), redLEDCurrent, LEDCURRENT_MA(redLEDCurrent), max30102_sample_rate_to_string(fsamp), BCM2711_i2c_clockfreq_to_string(i2c_freq));
+    printf("Executing Debug Count Loop %s %d %3.1f(redLEDCurrent)%d %3.1f(irLEDCurrent)%d fsamp: %s i2c_freq: %s\r\n", argv[0], duration, irLEDCurrent, LEDCURRENT_MA(irLEDCurrent), redLEDCurrent, LEDCURRENT_MA(redLEDCurrent), max30102_sample_rate_to_string(fsamp), BCM2711_i2c_clockfreq_to_string(i2c_freq));
 #else
-    printf("Executing Elapsed Time Loop %s %d %f(redLEDCurrent)%d %f(irLEDCurrent)%d fsamp: %s i2c_freq: %s\r\n", argv[0], duration, irLEDCurrent, LEDCURRENT_MA(irLEDCurrent), redLEDCurrent, LEDCURRENT_MA(redLEDCurrent), max30102_sample_rate_to_string(fsamp), BCM2711_i2c_clockfreq_to_string(i2c_freq));
+    printf("Executing Elapsed Time Loop %s %d %3.1f(redLEDCurrent)%d %3.1f(irLEDCurrent)%d fsamp: %s i2c_freq: %s\r\n", argv[0], duration, irLEDCurrent, LEDCURRENT_MA(irLEDCurrent), redLEDCurrent, LEDCURRENT_MA(redLEDCurrent), max30102_sample_rate_to_string(fsamp), BCM2711_i2c_clockfreq_to_string(i2c_freq));
 #endif
 
     if (!fpData) {
@@ -286,6 +278,7 @@ int main(int argc, char **argv) {
     };
 
     max30102_init_spo2_default(config);
+    fwrite(&config, sizeof(max30102_config_t), 1, fpData);
 
     usleep(10000);
 
@@ -301,28 +294,21 @@ int main(int argc, char **argv) {
             uint8_t *sampleBuffer = pingpongDataBuffer[pingpongDataIndex ^ 1];
             uint32_t numSamples = pingpongDataBufferAvailable[pingpongDataIndex ^ 1];
             fwrite(sampleBuffer, sizeof(uint8_t), numSamples*BYTESPERSAMPLE, fpData);
+#ifdef TEMPLOG
+            fwrite(&MAX30102_dieTemp, sizeof(float), 1, fpTemp);
+#endif
             rtcErrorFlag--;
 #ifdef DEBUG_LOOP_CNT
             writeCount++;
             printf("Write Count %d/%d secs\r\n", writeCount, duration);
 #endif
-            printf("RTC Error %d,%d\n", rtcErrorFlag, numSamples);
+            printf("RTC Error %d,%d, %3.1f\n", rtcErrorFlag, numSamples, MAX30102_dieTemp);
         }
-
-#ifdef TEMPLOG
-        if(tempErrorFlag > 0) {
-            float *sampleBuffer = pingpongTempBuffer[pingpongTempIndex ^ 1];
-            uint32_t numSamples = pingpongTempBufferAvailable[pingpongTempIndex ^ 1];
-            fwrite(sampleBuffer, sizeof(uint8_t), numSamples*sizeof(float), fpTemp);
-            tempErrorFlag--;
-            printf("Got Temp measurement Data %d\r\n", numSamples);
-        }
-#endif
 
         if(deviceReadyForTempMeasurement) {
             deviceReadyForTempMeasurement = 0;
             config.dieTemp = MAX30102_dieTemp;
-            fwrite(&config, sizeof(max30102_config_t), 1, fpData);
+            // fwrite(&config, sizeof(max30102_config_t), 1, fpData);
             //int ret = max30102_enable_temperature();
             printf("Got Die Temp Data %3.1f, size %lu\r\n", MAX30102_dieTemp, sizeof(max30102_config_t));
         }
@@ -337,9 +323,13 @@ int main(int argc, char **argv) {
         // Compute elapsed time in milliseconds:
         // Seconds to milliseconds
         elapsedTime = (t2.tv_sec - t1.tv_sec) * 1000.0;
+        int curquant_t = (int )(elapsedTime/250);
         // Microseconds to milliseconds
         elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
-        printf("Elapsed time %4.1f/%d secs\r\n", elapsedTime/1000, duration);
+        if(curquant_t > prevquant_t) {
+            printf("Elapsed time %4.1f/%d secs (%d, %d)\r\n", elapsedTime/1000, duration, curquant_t, prevquant_t);
+            prevquant_t = curquant_t;
+        }
         if(reasonCodeISR != NOERROR) {
             terminate(reasonCodeISR);
         }
@@ -348,7 +338,7 @@ int main(int argc, char **argv) {
             terminate(DONE);
         }
 #endif
-        usleep(100000);
+        usleep(1000);
     }
 
     return 0;
