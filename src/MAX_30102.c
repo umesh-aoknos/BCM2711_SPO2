@@ -333,18 +333,17 @@ int max30102_enable_die_temp_rdy_int(void) {
 
 /* Combined: turn on all interrupts */
 int max30102_enable_interrupts(uint8_t mask) {
-    uint8_t regVal[4];
+    uint8_t regVal[2];
 
-    // Clear any pending interrupts first (read status 1 & 2).[file:1]
     // Read current INT to apply mask aptly
-    int ret = max30102_reg_read(MAX30102_REG_INT_STATUS1, regVal, 4);
+    int ret = max30102_reg_read(MAX30102_REG_INT_ENABLE1, regVal, 2);
     if (ret != NOERROR) {
         reasonCode = ret;
         return REG_INT_STATUS1_READ_ERROR;
     }
 
-    regVal[0] = regVal[2] | (mask&MAX30102_INT_STAT_REG1_MASK);
-    regVal[1] = regVal[3] | (mask&MAX30102_INT_STAT_REG2_MASK);
+    regVal[0] = regVal[0] | (mask&MAX30102_INT_STAT_REG1_MASK);
+    regVal[1] = regVal[1] | (mask&MAX30102_INT_STAT_REG2_MASK);
 
     // Write masks to both INT
     ret = max30102_reg_write(MAX30102_REG_INT_ENABLE1, regVal, 2);
@@ -358,17 +357,16 @@ int max30102_enable_interrupts(uint8_t mask) {
 
 /* Combined: turn off all interrupts */
 int max30102_disable_interrupts(uint8_t mask) {
-    uint8_t regVal[4];
-    // Clear any pending interrupts first (read status 1 & 2).[file:1]
+    uint8_t regVal[2];
     // Read current INT to apply mask aptly
-    int ret = max30102_reg_read(MAX30102_REG_INT_STATUS1, regVal, 4);
+    int ret = max30102_reg_read(MAX30102_REG_INT_ENABLE1, regVal, 2);
     if (ret != NOERROR) {
         reasonCode = ret;
         return REG_INT_STATUS1_READ_ERROR;
     }
     //Flip mask bits
-    regVal[0] = regVal[2] & (~(mask&MAX30102_INT_STAT_REG1_MASK));
-    regVal[1] = regVal[3] & (~(mask&MAX30102_INT_STAT_REG2_MASK));
+    regVal[0] = regVal[0] & (~(mask&MAX30102_INT_STAT_REG1_MASK));
+    regVal[1] = regVal[1] & (~(mask&MAX30102_INT_STAT_REG2_MASK));
 
     // Write masks to both INT
     ret = max30102_reg_write(MAX30102_REG_INT_ENABLE1, regVal, 2);

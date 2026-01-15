@@ -58,6 +58,9 @@ max30102_sample_rate_t intToSampleRate(long intArg) {
     else if(intArg < 600) {
         fsamp = MAX30102_SR_400_SPS;
     }
+    else if(intArg < 900) {
+        fsamp = MAX30102_SR_800_SPS;
+    }
     else if(intArg < 1300){  
         fsamp = MAX30102_SR_1000_SPS;
     }
@@ -248,6 +251,9 @@ void terminate(int err) {
         max30102_disable_interrupts(intMask);
     }
     printf("Disabled Interrupts\r\n");
+
+    //Shut Down MAX 30102
+    max30102_set_bits(MAX30102_REG_MODE_CONFIG, MAX30102_MODE_SHDN);
 
     i2c_end();
     printf("i2C GPIO Stopped\r\n");

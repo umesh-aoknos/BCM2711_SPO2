@@ -1,4 +1,4 @@
-function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement, saveTextFlag)
+function [irLED, redLED, Temp, config] = LoadSPO2Data(FileName, sensorPlacement, saveTextFlag)
     if(nargin == 1)
         sensorPlacement = "L FF";
         saveTextFlag = 0;
@@ -6,20 +6,32 @@ function [irLED, redLED, config] = LoadSPO2Data(FileName, sensorPlacement, saveT
         saveTextFlag = 0;
     end
 
+    FileName
+    TempFileName = strrep(FileName, 'Data', 'Temp')
+
     GlobalDefines
-    fid = fopen(FileName, "r");
+    fid = fopen(FileName, "r")
+    fidTemp = fopen(TempFileName, "r")
+
+    %%Read Temp
+    if(fidTemp > 0)
+        Temp = fread(fidTemp, Inf, 'float');
+        fclose(fidTemp);
+    else
+        Temp = [];
+    end
     %%Read Config
     config = struct(); % Initialize an empty structure
     % Read the config fields
-    config.version = MAX30102GetConfig(fread(fid, 1, 'uint16'), VERSION)
+    config.version = MAX30102GetConfig(fread(fid, 1, 'uint16'), VERSION);
     if((config.version  < 32769)) % If version is negative, it's old format
         fseek(fid, 0, 'bof'); 
         config.version = 0;
     else
         config.version = config.version - 32768;
-        config.i2c_freq = MAX30102GetConfig(fread(fid, 1, 'uint16'), I2C_FREQ)
+        config.i2c_freq = MAX30102GetConfig(fread(fid, 1, 'uint16'), I2C_FREQ);
     end
-    config.sample_avg = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_AVG)
+    config.sample_avg = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_AVG);
     config.fifo_rollover_en = MAX30102GetConfig(fread(fid, 1, 'uint8'), ROLLOVER_EN);
     config.fifo_full_trigger = MAX30102GetConfig(fread(fid, 1, 'uint8'), FIFO_FULL_TRIGGER);
     config.sample_rate = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_RATE);

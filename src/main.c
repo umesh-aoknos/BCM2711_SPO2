@@ -57,6 +57,12 @@ void max_30102_wiringPiISR() {
     }
 
     if ((src & MAX30102_INT_A_FULL_EN) && deviceReadyForMeasurement) {
+        ret = max30102_disable_interrupts(MAX30102_INT_A_FULL_EN);
+        if(ret != NOERROR) {
+            reasonCodeISR = REG_ENABLE_ALL_INTERRUPT_ERROR;
+            reasonCode = ret;
+            return;
+        }
         // FIFO almost full maybe increase read rate or log
         // Process n samples in red_samples[0..n-1], ir_samples[0..n-1]
         // e.g., push into your DSP / DMA pipeline
@@ -102,6 +108,12 @@ void max_30102_wiringPiISR() {
 
         //Updated write Pointer and available sample count
         pingpongDataBufferAvailable[pingpongDataIndex] += numSamples;
+        ret = max30102_enable_interrupts(MAX30102_INT_A_FULL_EN);
+        if(ret != NOERROR) {
+            reasonCodeISR = REG_ENABLE_ALL_INTERRUPT_ERROR;
+            reasonCode = ret;
+            return;
+        }
     }
 
     if (src & MAX30102_INT_ALC_OVF_EN) {
