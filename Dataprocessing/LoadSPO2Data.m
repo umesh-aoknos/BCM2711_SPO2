@@ -7,7 +7,9 @@ function [irLED, redLED, Temp, config] = LoadSPO2Data(FileName, sensorPlacement,
     end
 
     FileName
-    TempFileName = strrep(FileName, 'Data', 'Temp')
+    [dirName, baseName, extn] = fileparts(FileName)
+    TempFileName = strrep(baseName, 'Data', 'Temp')
+    TempFileName = strcat(dirName,'/',TempFileName, extn)
 
     GlobalDefines
     fid = fopen(FileName, "r")
