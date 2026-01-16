@@ -27,7 +27,6 @@ LIB = -L$(SYS_LIB_PATH)  -lm -lwiringPi
 # Compilation flags
 DEBUG = -g -O0 -Wall
 # DEPENDENCIES = -DTEMPLOG -DDEBUG_LOOP_CNT
-DEPENDENCIES = -DTEMPLOG
 CFLAGS += $(DEBUG) -I$(DIR_INC) -I$(SYS_INC_PATH) -MP -MMD ${DEPENDENCIES}
 
 # Default rule

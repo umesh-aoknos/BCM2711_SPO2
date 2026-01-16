@@ -13,13 +13,6 @@ function [irLED, redLED, Temp, config] = LoadSPO2Data(FileName, sensorPlacement,
     fid = fopen(FileName, "r")
     fidTemp = fopen(TempFileName, "r")
 
-    %%Read Temp
-    if(fidTemp > 0)
-        Temp = fread(fidTemp, Inf, 'float');
-        fclose(fidTemp);
-    else
-        Temp = [];
-    end
     %%Read Config
     config = struct(); % Initialize an empty structure
     % Read the config fields
@@ -45,9 +38,14 @@ function [irLED, redLED, Temp, config] = LoadSPO2Data(FileName, sensorPlacement,
     config.irled_current = MAX30102GetConfig(fread(fid, 1, 'uint8'), IRLED_CUR);
     config.mode = MAX30102GetConfig(fread(fid, 1, 'uint8'), MODE);
     config.sensorPlacement = sensorPlacement;
-    if(config.version  > 0) % If version is present then adjust for struct size align (18byts vs 17bytes of info)
-        dummy = fread(fid, 3, 'uint8');%%Read dummy to align with dieTemp
-        config.dieTemp = fread(fid, 1, 'float');
+    switch(config.version)
+        case 1
+            % If version is 1. Read dieTemp and then skip 3 bytes for align (24bytes vs 21 bytes of info)
+            dummy = fread(fid, 3, 'uint8');%%Read dummy to align with dieTemp
+            config.dieTemp = fread(fid, 1, 'float');
+        case 2
+            % If version is 1. No dieTemp. Skip 3 bytes for align (18bytes vs 17 bytes of info)
+            dummy = fread(fid, 1, 'uint8');%%Read dummy to align PPG Data
     end
 
     %%Read Red/IR Sample Data
@@ -59,6 +57,22 @@ function [irLED, redLED, Temp, config] = LoadSPO2Data(FileName, sensorPlacement,
     %% redLED = B(3,:)*2^16 + B(2,:)*2^8 + B(1,:);
     %% irLED = B(6,:)*2^16 + B(5,:)*2^8 + B(4,:);
     fclose(fid);
+
+    %%Read Temp
+    if(fidTemp > 0)
+        if(config.version == 2)
+            rawTempA = fread(fidTemp, Inf, 'uint8');
+            N=floor(length(rawTempA)/2);
+            rawTempB = reshape(rawTempA(1:N*2),2,[]);
+            Temp = (rawTempB(1,:) + (rawTempB(2,:)*.0625/16));
+        else
+            Temp = fread(fidTemp, Inf, 'float');
+        end
+
+        fclose(fidTemp);
+    else
+        Temp = [];
+    end
 
     if(saveTextFlag == 1)
         saveDataTextFile(FileName, irLED, redLED, config);

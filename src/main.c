@@ -23,28 +23,30 @@
 FILE *fpData = NULL;
 MEM_MAP vc_mem;
 
-uint8_t pingpongDataBuffer[2][MAXNUMSAMPLES*BYTESPERSAMPLE];
-uint32_t pingpongDataBufferAvailable[2] = {0, 0};
-uint8_t pingpongDataIndex = PING;
-uint8_t rtcErrorFlag = 0;
+pingpong_t pingpongData, pingpongTemp;
 
-#ifdef TEMPLOG
 FILE *fpTemp = NULL;
-#endif
 float MAX30102_dieTemp = 0.0;
 
 volatile int32_t reasonCode = NOERROR;
 volatile int32_t reasonCodeInner = NOERROR;
 volatile int32_t reasonCodeISR = NOERROR;
 
-uint8_t deviceReadyForTempMeasurement = 0;
+uint8_t allowedIntMask =
+        MAX30102_INT_A_FULL_EN
+        // |M AX30102_INT_PPG_RDY_EN
+        | MAX30102_INT_ALC_OVF_EN
+        // | MAX30102_INT_PWR_RDY_EN
+        | MAX30102_INT_DIE_TEMP_RDY_EN
+        ;
+
 //Note ISR Cannot terminate. Needs to return with Code for main loop to process and terminate
 void max_30102_wiringPiISR() {
     //Don't set deviceReadyForMeasurement to 1 without updating fwrite for max30102_config_t
     static uint8_t deviceReadyForMeasurement = 0;
     uint32_t src;
 
-    int ret = max30102_get_interrupt_source(&src);
+    int ret = max30102_get_interrupt_source(&src, allowedIntMask);
     if (ret != NOERROR) {
         reasonCode = ret;
         reasonCodeISR = MAX30102_GET_INTERRUPT_SRC_ERROR;
@@ -57,46 +59,10 @@ void max_30102_wiringPiISR() {
     }
 
     if ((src & MAX30102_INT_A_FULL_EN) && deviceReadyForMeasurement) {
-        ret = max30102_disable_interrupts(MAX30102_INT_A_FULL_EN);
-        if(ret != NOERROR) {
-            reasonCodeISR = REG_ENABLE_ALL_INTERRUPT_ERROR;
-            reasonCode = ret;
-            return;
-        }
-        // FIFO almost full maybe increase read rate or log
         // Process n samples in red_samples[0..n-1], ir_samples[0..n-1]
         // e.g., push into your DSP / DMA pipeline
 
-        uint32_t numAvailableSamples = pingpongDataBufferAvailable[pingpongDataIndex];
-        uint8_t *curPtr = NULL;
-        if((MAXNUMSAMPLES - numAvailableSamples) > MAX30102_FIFO_LEN) {
-            //stay on current buffer
-            curPtr = pingpongDataBuffer[pingpongDataIndex] + numAvailableSamples*BYTESPERSAMPLE;
-        }
-        else {
-            //switch buffer
-            ret = max30102_get_temperature(&MAX30102_dieTemp);
-            if(ret != NOERROR) {
-                reasonCodeISR = REG_TEMP_INT_READ_ERROR;
-                reasonCode = ret;
-                return;
-            }
-            ret = max30102_enable_temperature();
-            if(ret != NOERROR) {
-                reasonCodeISR = REG_TEMP_CONFIG_WRITE_ERROR;
-                reasonCode = ret;
-                return;
-            }
-            rtcErrorFlag++;
-            // printf("Current buffer %d has %d samples\r\n", pingpongDataIndex, pingpongDataBufferAvailable[pingpongDataIndex]);
-            pingpongDataIndex ^= 1;
-            // printf("Switching to %d buffer\r\n", pingpongDataIndex);
-
-            //Switch Buffer,reset write Pointer and available sample count
-            curPtr = pingpongDataBuffer[pingpongDataIndex];
-            pingpongDataBufferAvailable[pingpongDataIndex] = 0;
-        }
-
+        uint8_t *curPtr = getCurPtr(&pingpongData);
         int numSamples = max30102_read_fifoRaw(curPtr, MAX30102_FIFO_LEN);
         // printf("Reacting to FIFO FULL %d\r\n", numSamples);
 
@@ -107,11 +73,13 @@ void max_30102_wiringPiISR() {
         }
 
         //Updated write Pointer and available sample count
-        pingpongDataBufferAvailable[pingpongDataIndex] += numSamples;
-        ret = max30102_enable_interrupts(MAX30102_INT_A_FULL_EN);
+        updatePingPong(&pingpongData, numSamples);
+
+        uint8_t startTempMeasure = 1;
+        ret = updateTempPingPong(startTempMeasure);
         if(ret != NOERROR) {
-            reasonCodeISR = REG_ENABLE_ALL_INTERRUPT_ERROR;
             reasonCode = ret;
+            reasonCodeISR = READMAX30102_FIFO_ERROR;
             return;
         }
     }
@@ -122,21 +90,28 @@ void max_30102_wiringPiISR() {
     }
 
     if (src & MAX30102_INT_DIE_TEMP_RDY_EN) {
+        allowedIntMask =
+            MAX30102_INT_A_FULL_EN
+            // |M AX30102_INT_PPG_RDY_EN
+            | MAX30102_INT_ALC_OVF_EN
+            // | MAX30102_INT_PWR_RDY_EN
+            // | MAX30102_INT_DIE_TEMP_RDY_EN
+            ;
         deviceReadyForMeasurement = 1;
-        deviceReadyForTempMeasurement = 0;
-        ret = max30102_disable_interrupts(MAX30102_INT_DIE_TEMP_RDY_EN);
+        uint8_t startTempMeasure = 0;
+        ret = updateTempPingPong(startTempMeasure);
         if(ret != NOERROR) {
-            reasonCodeISR = REG_ENABLE_ALL_INTERRUPT_ERROR;
             reasonCode = ret;
+            reasonCodeISR = READMAX30102_FIFO_ERROR;
             return;
         }
-        // ret = max30102_get_temperature(&MAX30102_dieTemp);
-        // printf("Got Temp Interrupt and Temp Data %d,%3.1f\r\n", ret, MAX30102_dieTemp);
     }
 
     if (src & MAX30102_INT_PWR_RDY_EN) {
         printf("Reacting to Power Ready Interrupt\r\n");
     }
+
+    ret = max30102_enable_interrupts(allowedIntMask);
 }
 
 int main(int argc, char **argv) {
@@ -146,12 +121,10 @@ int main(int argc, char **argv) {
     // Start timer
     gettimeofday(&t1, NULL);
 
-#ifdef DEBUG_LOOP_CNT
-    uint32_t writeCount = 0;
-#else
+    initPingPongStruct(&pingpongData, MAXNUMSAMPLES, MAX30102_FIFO_LEN, BYTESPERSAMPLE);
+    initPingPongStruct(&pingpongTemp, MAXNUMSAMPLES, 1, 2);
     struct timeval t2;
     double elapsedTime;
-#endif
 
     /* Mapping the memory for peripherals and
      * mapping the uncached memory to be used*/
@@ -210,11 +183,7 @@ int main(int argc, char **argv) {
             break;
     }
 
-#ifdef DEBUG_LOOP_CNT
-    printf("Executing Debug Count Loop %s %d %3.1f(redLEDCurrent)%d %3.1f(irLEDCurrent)%d fsamp: %s i2c_freq: %s\r\n", argv[0], duration, irLEDCurrent, LEDCURRENT_MA(irLEDCurrent), redLEDCurrent, LEDCURRENT_MA(redLEDCurrent), max30102_sample_rate_to_string(fsamp), BCM2711_i2c_clockfreq_to_string(i2c_freq));
-#else
     printf("Executing Elapsed Time Loop %s %d %3.1f(redLEDCurrent)%d %3.1f(irLEDCurrent)%d fsamp: %s i2c_freq: %s\r\n", argv[0], duration, irLEDCurrent, LEDCURRENT_MA(irLEDCurrent), redLEDCurrent, LEDCURRENT_MA(redLEDCurrent), max30102_sample_rate_to_string(fsamp), BCM2711_i2c_clockfreq_to_string(i2c_freq));
-#endif
 
     if (!fpData) {
         fpData = fopen(dataFileName, "wb");
@@ -227,7 +196,6 @@ int main(int argc, char **argv) {
         }
     }
 
-#ifdef TEMPLOG
     if (!fpTemp) {
         fpTemp = fopen(tempFileName, "wb");
         if(fpTemp == NULL) {
@@ -238,7 +206,6 @@ int main(int argc, char **argv) {
             printf("Opening File %s. Result %d\r\n", tempFileName, (fpTemp == NULL));
         }
     }
-#endif
 
     // Exception handling:ctrl + c
     signal(SIGINT, terminate);
@@ -257,7 +224,10 @@ int main(int argc, char **argv) {
 
     printf("PART_ID(0xFF): 0x%02X\n", chip_id);  // Expect 0x15
 
-    uint16_t configVersion = 0x8000 |0x0001; //Version 1
+    
+    //Version Non (would read i2c_freq)                                                             Struct size 13
+    //uint16_t configVersion = 0x8000 |0x0001; //Version 1. Added Version, I2CFreq, float Temp      Struct size 24 (24 + 3 Dummy Byte)
+    uint16_t configVersion = 0x8000 |0x0002; //Version 2. Removed dieTemp as we get Temp Log        Struct size 18 (17 + 1 Dummy Byte)
     max30102_config_t config = {
         configVersion,
         i2c_freq,
@@ -274,7 +244,6 @@ int main(int argc, char **argv) {
         LEDCURRENT_MA(redLEDCurrent), //mA
         LEDCURRENT_MA(irLEDCurrent), //mA
         MAX30102_MODE_SPO2,
-        MAX30102_dieTemp,
     };
 
     max30102_init_spo2_default(config);
@@ -284,41 +253,10 @@ int main(int argc, char **argv) {
 
     while (1) {
         // Main processing / networking / logging, etc.
-        if(rtcErrorFlag > 0) {
-            if(rtcErrorFlag > 1) {
-                printf("RTC Error %d\n", rtcErrorFlag);
-                reasonCode = RTC_ERROR;
-                terminate(RTC_ERROR);
-            }
+        uint8_t flushFlag= 0;
+        outputPingPong(&pingpongData, fpData, flushFlag);
+        outputPingPong(&pingpongTemp, fpTemp, flushFlag);
 
-            uint8_t *sampleBuffer = pingpongDataBuffer[pingpongDataIndex ^ 1];
-            uint32_t numSamples = pingpongDataBufferAvailable[pingpongDataIndex ^ 1];
-            fwrite(sampleBuffer, sizeof(uint8_t), numSamples*BYTESPERSAMPLE, fpData);
-#ifdef TEMPLOG
-            fwrite(&MAX30102_dieTemp, sizeof(float), 1, fpTemp);
-#endif
-            rtcErrorFlag--;
-#ifdef DEBUG_LOOP_CNT
-            writeCount++;
-            printf("Write Count %d/%d secs\r\n", writeCount, duration);
-#endif
-            printf("RTC Error %d,%d, %3.1f\n", rtcErrorFlag, numSamples, MAX30102_dieTemp);
-        }
-
-        if(deviceReadyForTempMeasurement) {
-            deviceReadyForTempMeasurement = 0;
-            config.dieTemp = MAX30102_dieTemp;
-            // fwrite(&config, sizeof(max30102_config_t), 1, fpData);
-            //int ret = max30102_enable_temperature();
-            printf("Got Die Temp Data %3.1f, size %lu\r\n", MAX30102_dieTemp, sizeof(max30102_config_t));
-        }
-
-#ifdef DEBUG_LOOP_CNT
-        if(writeCount > duration) {
-            reasonCode = DONE;
-            terminate(DONE);
-        }
-#else
         gettimeofday(&t2, NULL);
         // Compute elapsed time in milliseconds:
         // Seconds to milliseconds
@@ -337,7 +275,6 @@ int main(int argc, char **argv) {
             reasonCode = DONE;
             terminate(DONE);
         }
-#endif
         usleep(1000);
     }
 

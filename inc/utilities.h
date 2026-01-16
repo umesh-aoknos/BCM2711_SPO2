@@ -1,6 +1,7 @@
 #ifndef __UTILITIES_H__
 #define __UTILITIES_H__
 #include <signal.h>
+#include <stdio.h>
 
 #define MAXSTRLEN           64
 #define MAXNUMSAMPLES       0x200
@@ -11,6 +12,16 @@ typedef enum {
     PING = 0,
     PONG = 1,
 } pingpongIndex_t;
+
+typedef struct {
+    uint8_t Index;
+    uint8_t *Buffer[2];// [MAXNUMSAMPLES*BYTESPERSAMPLE];
+    uint32_t Available[2];
+    uint32_t maxSamples;
+    uint32_t fifoLen;
+    uint8_t sampleSize;
+    uint8_t rtcErrorFlag;
+} pingpong_t;
 
 typedef enum {
     NOERROR=0,
@@ -80,4 +91,11 @@ BCM2711_i2c_clockfreq_t intToI2CFreq(long intArg);
 const char* BCM2711_i2c_clockfreq_to_string(BCM2711_i2c_clockfreq_t freq);
 const char *getErrStr(int err);
 void terminate(int); 
+
+int updateTempPingPong(uint8_t startTempMeasure);
+void initPingPongStruct(pingpong_t *ptrPingPong, uint32_t maxSamples, uint32_t fifoLen, uint8_t sampleSize);
+uint8_t *getCurPtr(pingpong_t *ptrPingPong);
+void updatePingPong(pingpong_t *ptrPingPong, uint32_t numSample);
+void outputPingPong(pingpong_t *ptrPingPong, FILE *fp, uint8_t flush);
+void clearPingPong(pingpong_t *ptrPingPong);
 #endif

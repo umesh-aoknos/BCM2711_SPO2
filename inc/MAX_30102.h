@@ -141,7 +141,6 @@ typedef struct {
     uint8_t redled_current;
     uint8_t irled_current;
     uint8_t mode;
-    float dieTemp;
 } max30102_config_t;
 
 /* Low-level hooks you already implemented (provided elsewhere) */
@@ -154,6 +153,7 @@ int max30102_reset(void);
 int max30102_init_spo2_default(max30102_config_t config);
 
 int max30102_enable_temperature();
+int max30102_get_rawTempData(uint8_t *ptrTemp, uint8_t startTempMeasure);
 int max30102_get_temperature(float *ptrTemp);
 int max30102_read_temperature(float *temp_c);
 
@@ -176,7 +176,7 @@ int max30102_enable_die_temp_rdy_int(void);
 int max30102_enable_interrupts(uint8_t mask);
 int max30102_disable_interrupts(uint8_t mask);
 int max30102_print_interrupt_source(void);
-int max30102_get_interrupt_source(uint32_t *src_mask);
+int max30102_get_interrupt_source(uint32_t *src_mask, uint8_t disableIntMask);
 
 int max30102_read_fifoRaw(uint8_t *sampleBuffer,
         int max_samples);
