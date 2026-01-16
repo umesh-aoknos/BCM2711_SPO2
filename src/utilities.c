@@ -8,14 +8,9 @@ extern MEM_MAP gpio_regs, i2c_regs;
 extern MEM_MAP vc_mem;
 
 extern FILE *fpData;
-
-extern uint8_t rtcErrorFlag, pingpongDataIndex;
-extern uint8_t pingpongDataBuffer[2][MAXNUMSAMPLES*BYTESPERSAMPLE];
-extern uint32_t pingpongDataBufferAvailable[2];
-
-#ifdef TEMPLOG
 extern FILE *fpTemp;
-#endif
+
+extern pingpong_t pingpongData, pingpongTemp;
 
 extern int32_t reasonCode;
 extern int32_t reasonCodeISR;
@@ -267,10 +262,13 @@ void terminate(int err) {
     unmap_periph_mem(&i2c_regs);
     printf("unmapeed I2C Regs\r\n");
 
-    uint8_t *sampleBuffer = pingpongDataBuffer[pingpongDataIndex];
-    uint32_t numSamples = pingpongDataBufferAvailable[pingpongDataIndex];
-    printf(" RTC %d. Flush Data from data buffer %d. Num Samples %d. Sample[0]%d\r\n", rtcErrorFlag, pingpongDataIndex, pingpongDataBufferAvailable[pingpongDataIndex], sampleBuffer[0]);
-    fwrite(sampleBuffer, sizeof(uint8_t), numSamples*BYTESPERSAMPLE, fpData);
+        
+    uint8_t flushFlag= 1;
+    outputPingPong(&pingpongData, fpData, flushFlag);
+    outputPingPong(&pingpongTemp, fpTemp, flushFlag);
+
+    clearPingPong(&pingpongData);
+    clearPingPong(&pingpongTemp);
     printf("Data flushed\r\n");
 
     if(fpData) {
@@ -278,14 +276,115 @@ void terminate(int err) {
         fpData = NULL;
     }
 
-#ifdef TEMPLOG
     if(fpTemp) {
         fclose(fpTemp);
         fpTemp = NULL;
     }
-#endif
 
     printf("pingpong flushed and fpData/fpTemp closed. Exiting\r\n");
 
     exit(0);
+}
+
+int updateTempPingPong(uint8_t startTempMeasure) {
+        uint8_t *curTempPtr = getCurPtr(&pingpongTemp);
+        int ret = max30102_get_rawTempData(curTempPtr, startTempMeasure);
+        if(ret != NOERROR) {
+            reasonCode = ret;
+            return REG_TEMP_INT_READ_ERROR;
+        }
+
+        if(startTempMeasure == 0) {
+            float temp = *curTempPtr + ((*(curTempPtr + 1))*0.0625f);
+            printf("Got Temp Interrupt and Temp Data %d,%d, %5.2f\r\n", *curTempPtr, *(curTempPtr + 1), temp);
+        }
+
+        //Updated write Pointer and available sample count
+        uint32_t numSamples = 1;
+        updatePingPong(&pingpongTemp, numSamples);
+
+        return NOERROR;
+}
+
+void initPingPongStruct(pingpong_t *ptrPingPong, uint32_t maxSamples, uint32_t fifoLen, uint8_t sampleSize) {
+    ptrPingPong->maxSamples = maxSamples;
+    ptrPingPong->sampleSize = sampleSize;
+    ptrPingPong->rtcErrorFlag = 0;
+    ptrPingPong->Index = PING;
+    ptrPingPong->fifoLen = fifoLen;
+    ptrPingPong->Buffer[0] = malloc(maxSamples*sampleSize);
+    ptrPingPong->Buffer[1] = malloc(maxSamples*sampleSize);
+    ptrPingPong->Available[0] = 0;
+    ptrPingPong->Available[1] = 0;
+}
+
+uint8_t *getCurPtr(pingpong_t *ptrPingPong) {
+    uint32_t numAvailableSamples = ptrPingPong->Available[ptrPingPong->Index];
+    uint8_t *curPtr = NULL;
+    if((ptrPingPong->maxSamples - numAvailableSamples) > ptrPingPong->fifoLen) {
+        //stay on current buffer
+        curPtr = ptrPingPong->Buffer[ptrPingPong->Index] + numAvailableSamples*ptrPingPong->sampleSize;
+    }
+    else {
+        //switch buffer
+        ptrPingPong->rtcErrorFlag++;
+        // printf("Current buffer %d has %d samples\r\n", pingpongDataIndex, pingpongDataBufferAvailable[pingpongDataIndex]);
+        ptrPingPong->Index ^= 1;
+        // printf("Switching to %d buffer\r\n", pingpongDataIndex);
+
+        //Switch Buffer,reset write Pointer and available sample count
+        curPtr = ptrPingPong->Buffer[ptrPingPong->Index];
+        ptrPingPong->Available[ptrPingPong->Index] = 0;
+    }
+    return curPtr;
+}
+
+void updatePingPong(pingpong_t *ptrPingPong, uint32_t numSamples) {
+    uint8_t index = ptrPingPong->Index;
+    ptrPingPong->Available[index] += numSamples;
+#if 0
+    if(ptrPingPong->sampleSize == 4) {
+        uint32_t available = ptrPingPong->Available[index];
+        float *curPtr = (float *)ptrPingPong->Buffer[index];
+        printf("Temp PingPong Avail %d, Index %d\r\n", available, index);
+        printf("Temp ");
+        for(int i = 0; i < available; i++) {
+            printf("%3.1f,", *curPtr++);
+        }
+        printf("\r\n");
+    }
+#endif
+}
+        
+void outputPingPong(pingpong_t *ptrPingPong, FILE *fp, uint8_t flush) {
+    if((ptrPingPong->rtcErrorFlag > 0) ||  ((ptrPingPong->rtcErrorFlag == 0) && (flush == 1))) {
+        if((ptrPingPong->rtcErrorFlag > 1) && (flush == 0)) {
+            printf("RTC Error %d\n", ptrPingPong->rtcErrorFlag);
+            reasonCode = RTC_ERROR;
+            terminate(RTC_ERROR);
+        }
+
+        uint8_t index = PING;
+        if(flush) {
+            index = ptrPingPong->Index;
+        }
+        else {
+            index = ptrPingPong->Index ^ 1;
+        }
+
+        if(flush) {
+            uint32_t available = ptrPingPong->Available[index];
+            printf("FLushing Temp PingPong Avail %d, Index %d\r\n", available, index);
+        }
+
+        uint8_t *sampleBuffer = ptrPingPong->Buffer[index];
+        uint32_t numSamples = ptrPingPong->Available[index];
+        fwrite(sampleBuffer, ptrPingPong->sampleSize, numSamples, fp);
+        ptrPingPong->rtcErrorFlag--;
+    }
+}
+
+void clearPingPong(pingpong_t *ptrPingPong) {
+    free(ptrPingPong->Buffer[0]);
+    free(ptrPingPong->Buffer[1]);
 }

@@ -6,6 +6,7 @@
 #include "utilities.h"
 extern int32_t reasonCode;
 extern int32_t reasonCodeInner;
+extern uint8_t allowedIntMask;
 
 /* Check PART_ID register (0xFF should be 0x15) [file:1] */
 int max30102_check_id(uint8_t *part_id) {
@@ -120,15 +121,7 @@ int max30102_init_spo2_default(max30102_config_t config) {
         terminate(REG_TEMP_CONFIG_WRITE_ERROR);
     }
 
-    regValue[0] = 
-        MAX30102_INT_A_FULL_EN
-        // |M AX30102_INT_PPG_RDY_EN
-        | MAX30102_INT_ALC_OVF_EN
-        // | MAX30102_INT_PWR_RDY_EN
-        | MAX30102_INT_DIE_TEMP_RDY_EN
-        ;
-
-    ret = max30102_enable_interrupts(regValue[0]);
+    ret = max30102_enable_interrupts(allowedIntMask);
     if (ret != NOERROR) {
         reasonCode = ret;
         terminate(REG_ENABLE_ALL_INTERRUPT_ERROR);
@@ -183,21 +176,37 @@ int max30102_read_temperature(float *ptrTemp) {
     return max30102_get_temperature(ptrTemp);
 }
 
+int max30102_get_rawTempData(uint8_t *ptrTemp, uint8_t startTempMeasure) {
+    int ret = max30102_reg_read(MAX30102_REG_TEMP_INT, ptrTemp, 2);
+    if (ret != NOERROR) {
+        reasonCode = ret;
+        return REG_TEMP_INT_READ_ERROR;
+    }
+
+    if(startTempMeasure) {
+        ret =max30102_enable_temperature();
+        if (ret != NOERROR) {
+            reasonCode = ret;
+            return REG_TEMP_CONFIG_WRITE_ERROR;
+        }
+    }
+    return NOERROR;
+}
+
 int max30102_get_temperature(float *ptrTemp) {
     uint8_t tif[3] = {0, 0, 0};
     int ret = max30102_reg_read(MAX30102_REG_TEMP_INT, tif, 3);
     if (ret != NOERROR) {
         reasonCode = ret;
-        terminate(REG_TEMP_INT_READ_ERROR);
+        return REG_TEMP_INT_READ_ERROR;
     }
 
-    if(tif[3] == 0) {//Temp EN should be zero, else Temp is invalid
+    if(tif[2] == 0) {//Temp EN should be zero, else Temp is invalid
         *ptrTemp = tif[0] + (tif[1] >> 4) * 0.0625f;
     }
     else {
         *ptrTemp = -100.0;
     }
-    // printf("get temp %d,0x%0X, %3.1f\r\n", ret, regValue, *ptrTemp);
     return NOERROR;
 }
 
@@ -419,7 +428,7 @@ int max30102_print_interrupt_source(void) {
 }
 
 // Returns >=0 bitmask; <0 on I2C error
-int max30102_get_interrupt_source(uint32_t *src_mask) {
+int max30102_get_interrupt_source(uint32_t *src_mask, uint8_t disableIntMask) {
     int ret;
     uint8_t mask = 0;
     if (!src_mask) {
@@ -428,9 +437,9 @@ int max30102_get_interrupt_source(uint32_t *src_mask) {
         return NULL_PTR_ERROR;
     }
 
-    uint8_t status[2] = {0, 0};
+    uint8_t status[4] = {0, 0, 0, 0};
     // Read and clear Interrupt Status 1 and 2
-    ret = max30102_reg_read(MAX30102_REG_INT_STATUS1, status, 2);
+    ret = max30102_reg_read(MAX30102_REG_INT_STATUS1, status, 4);
     if (ret != NOERROR) {
         reasonCodeInner = ret;
         reasonCode = ret;
@@ -458,6 +467,20 @@ int max30102_get_interrupt_source(uint32_t *src_mask) {
     if (status[1] & MAX30102_INT_DIE_TEMP_RDY_EN) {
         mask |= MAX30102_INT_DIE_TEMP_RDY_EN;  // DIE_TEMP_RDY[file:1]
     }
+    
+    //Flip mask bits
+    if(disableIntMask) {
+        status[0] = status[2] & (~(disableIntMask&MAX30102_INT_STAT_REG1_MASK));
+        status[1] = status[3] & (~(disableIntMask&MAX30102_INT_STAT_REG2_MASK));
+
+        // Write masks to both INT
+        ret = max30102_reg_write(MAX30102_REG_INT_ENABLE1, status, 2);
+        if (ret != NOERROR) {
+            reasonCode = ret;
+            return REG_INT_ENABLE1_SETBITS_ERROR;
+        }
+    }
+
 
     *src_mask = mask;
     return NOERROR;
