@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define MAX30102_I2C_ADDR   0x57 
 #define MAX30102_INT_PIN    16
 
 /* 7-bit I2C address (datasheet: AE/AF as 8-bit) */
@@ -150,6 +149,10 @@ int max30102_reg_read(uint8_t reg, uint8_t *data, uint16_t len);
 /* High-level API */
 int max30102_check_id(uint8_t *part_id);
 int max30102_reset(void);
+// Forward declaration for ISR
+void max_30102_isr(void);
+int max30102_init();
+void max30102_end(void);     // restore GPIO pins to input
 int max30102_init_spo2_default(max30102_config_t config);
 
 int max30102_enable_temperature();

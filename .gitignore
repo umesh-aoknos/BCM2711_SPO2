@@ -3,6 +3,7 @@
 Dataprocessing/*.dat
 Dataprocessing/*.jpg
 Dataprocessing/*.txt
+Dataprocessing/*.json
 Dataprocessing/saveData/
 *DS_Store*
 # Ignore Vim swap, backup, and undo files

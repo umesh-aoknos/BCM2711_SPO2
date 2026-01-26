@@ -1,12 +1,11 @@
 #include "MAX_30102.h"
 #include "i2c_utilities.h"
 #include "utilities.h"
-#include "gpio_utilities.h"
 #include "mem_map.h"
 
 extern MEM_MAP i2c_regs;
 
-void i2c1_clear_status(void) {
+void i2c_clear_status(void) {
     // Rasp Pi Status Reg config
     // Slave has held the SCL signal
     // Ack Error Clear
@@ -15,18 +14,22 @@ void i2c1_clear_status(void) {
     *REG32(i2c_regs, I2C_S) |= (I2C_S_CLKT | I2C_S_ERR | I2C_S_DONE);
 }
 
-void i2c1_init(void) {
-    i2c1_clear_status();
+void i2c_init(BCM2711_i2c_clockfreq_t i2c_freq) {
+    i2c_clear_status();
 
     // write back to control register
     *REG32(i2c_regs, I2C_C) |= (I2C_C_I2CEN | I2C_C_CLEAR);
+
+    //Set I2C Clock
+    //*REG32(i2c_regs, I2C_CDIV) = i2c_freq;
 }
 
 /*
  * Blocking write: send `len` bytes from buf to 7-bit slave `addr`
  * Returns 0 on success, negative on error.
  */
-int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
+int minWriteTimeout = I2C_TIMEOUT;
+int i2c_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
     if (len == 0)
         return NOERROR;
 
@@ -34,7 +37,7 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
     *REG32(i2c_regs, I2C_DLEN) = len;
 
     // CRITICAL: Clear status + FIFO, **then wait**
-    i2c1_clear_status();
+    i2c_clear_status();
     //Clear FIFO
     *REG32(i2c_regs, I2C_C) = I2C_C_CLEAR;
 
@@ -60,18 +63,21 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
     int loopCount = I2C_TIMEOUT;
     status = *REG32(i2c_regs, I2C_S);
 
-    //Continue writing to fifo  as more room is made available till remaining = 0 or there's an error
+    //Continue writing to fifo as more room is made available till remaining = 0 or there's an error
     // while (remaining > 0)
     while (!(status & I2C_S_DONE)) {
         if ((len > 0) && (status & I2C_S_TXD)) {
             *REG8(i2c_regs, I2C_FIFO) = *buf++;
             len--;
             //Reset timeout to wait for next write
+            if(loopCount < minWriteTimeout) {
+                minWriteTimeout = loopCount;
+            }
             loopCount = I2C_TIMEOUT;
         }
 
         if (status & (I2C_S_ERR | I2C_S_CLKT)) {
-            i2c1_clear_status();
+            i2c_clear_status();
             return I2C_WRITE_ERROR;
         }
 
@@ -81,7 +87,7 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
         status = *REG32(i2c_regs, I2C_S);
     }
 
-    i2c1_clear_status();
+    i2c_clear_status();
     if(len == 0) {
         return NOERROR;
     }
@@ -90,7 +96,8 @@ int i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len) {
     }
 }
 
-int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
+int minReadTimeout = I2C_TIMEOUT;
+int i2c_read(uint8_t addr, uint8_t *buf, uint16_t len) {
     if (len == 0)
         return NOERROR;
 
@@ -99,7 +106,7 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
     *REG32(i2c_regs, I2C_DLEN) = len;
 
     // CRITICAL: Clear status + FIFO, **then wait**
-    i2c1_clear_status();
+    i2c_clear_status();
 
     //Clear i2C control
     // start transfer (read)
@@ -115,12 +122,15 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
             *buf++ = *REG8(i2c_regs, I2C_FIFO);
             len--;
             //Reset timeout to wait for next read
+            if(loopCount < minReadTimeout) {
+                minReadTimeout = loopCount;
+            }
             loopCount = I2C_TIMEOUT;
         }
         // error?
         if (status & (I2C_S_ERR | I2C_S_CLKT)) {
             // clear DONE/ERR/CLKT
-            i2c1_clear_status();
+            i2c_clear_status();
             return I2C_READ_ERROR;
         }
 
@@ -132,7 +142,7 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
     }
 
     // clear DONE/ERR/CLKT
-    i2c1_clear_status();
+    i2c_clear_status();
 
     if(len == 0) {
         return NOERROR;
@@ -140,26 +150,4 @@ int i2c1_read(uint8_t addr, uint8_t *buf, uint16_t len) {
     else {
         return I2C_READ_REMNZ_ERROR;
     }
-
-    // return (remaining == 0) ? NOERROR : I2C_READ_REMNZ_ERROR;
-}
-
-int i2c_config(BCM2711_i2c_clockfreq_t i2c_freq) {
-    /* Set the SPI0 pins to the Alt 0 function to enable SPI0 access on them */
-
-    gpio_mode(I2C0_SDA_PIN, GPIO_ALT0); // CE1
-    gpio_mode(I2C0_SCL_PIN, GPIO_ALT0); // CE0
-    gpio_set(MAX30102_INT_PIN, GPIO_IN, GPIO_PULLUP);
-
-    //Set I2C Clock
-    //*REG32(i2c_regs, I2C_CDIV) = i2c_freq;
-
-    return NOERROR; // OK
-}
-
-
-void i2c_end(void) {  
-    /* Set all the SPI0 pins back to input */
-    gpio_mode(I2C0_SDA_PIN, GPIO_IN); // CE1
-    gpio_mode(I2C0_SCL_PIN, GPIO_IN); // CE0
 }

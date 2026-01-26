@@ -1,9 +1,9 @@
-function analyzeSPO2Data(irLED, redLED, Temp, config, skipSamplesDur)
-    if(nargin == 3)
+function analyzeSPO2Data(irLED, redLED, Temp, version, ppgConfig, skipSamplesDur)
+    if(nargin == 5)
         skipSamplesDur = 0;%%sec
     end
     reflected = 1;
-    fs = config.sample_rate;
+    fs = ppgConfig.ppgSampleRate;
     ts = 1/fs;
     N = length(irLED);
     t = (0:N-1)*ts;
@@ -32,10 +32,10 @@ function analyzeSPO2Data(irLED, redLED, Temp, config, skipSamplesDur)
     ylabel(axfig1(1), 'IR LED');
     ylabel(axfig1(2), 'Red LED');
     legend('IR LED', 'RED LED')
-    if(config.version == 1)
-        titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, Die Temp=%2.1f(C)",config.sensorPlacement, fs,config.redled_current,config.redled_current,config.pulse_width, config.dieTemp);
+    if(version == 1)
+        titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, Die Temp=%2.1f(C)",ppgConfig.sensorPlacement, fs,ppgConfig.redLEDCurrent,ppgConfig.redLEDCurrent,ppgConfig.pulseWidth, ppgConfig.dieTemp);
     else
-        titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d.",config.sensorPlacement, fs,config.redled_current,config.redled_current,config.pulse_width);
+        titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d.",ppgConfig.sensorPlacement, fs,ppgConfig.redLEDCurrent,ppgConfig.redLEDCurrent,ppgConfig.pulseWidth);
     end
     title(titleStr)
     grid

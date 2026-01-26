@@ -1,11 +1,10 @@
 #ifndef __MEM_MAP__
 #define __MEM_MAP__
 //Mem Map and the Videocore Memory Functions
+
+#include "mem_map.h"
 #include "gpio_utilities.h"
 #include "i2c_utilities.h"
-#include "mem_map.h"
-
-//extern MEM_MAP spi_regs, usec_regs;
 
 // Virtual memory pointers to acceess GPIO, DMA and PWM from user space
 MEM_MAP gpio_regs, i2c_regs;
@@ -65,9 +64,6 @@ void map_devices(void) {
     printf("I2C ");
     map_periph(&i2c_regs, (void *)I2C0_BASE, PAGE_SIZE);
 }
-
-char *dma_regstrs[] = {"DMA CS", "CB_AD", "TI", "SRCE_AD", "DEST_AD",
-    "TFR_LEN", "STRIDE", "NEXT_CB", "DEBUG", ""};
 
 // Use mmap to obtain virtual address, given physical
 void *map_periph(MEM_MAP *mp, void *base, int size) {
@@ -154,7 +150,7 @@ uint32_t alloc_vc_mem(int fd, uint32_t size, VC_ALLOC_FLAGS flags) {
         .uints={PAGE_ROUNDUP(size), PAGE_SIZE, flags}};
     return(msg_mbox(fd, &msg));
 }
-//
+
 // Lock allocated memory, return bus address
 void *lock_vc_mem(int fd, int h) {
     VC_MSG msg={.tag=0x3000d, .blen=4, .dlen=4, .uints={h}};

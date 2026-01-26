@@ -40,80 +40,6 @@ uint8_t allowedIntMask =
         | MAX30102_INT_DIE_TEMP_RDY_EN
         ;
 
-//Note ISR Cannot terminate. Needs to return with Code for main loop to process and terminate
-void max_30102_wiringPiISR() {
-    //Don't set deviceReadyForMeasurement to 1 without updating fwrite for max30102_config_t
-    static uint8_t deviceReadyForMeasurement = 0;
-    uint32_t src;
-
-    int ret = max30102_get_interrupt_source(&src, allowedIntMask);
-    if (ret != NOERROR) {
-        reasonCode = ret;
-        reasonCodeISR = MAX30102_GET_INTERRUPT_SRC_ERROR;
-        return;
-    }
-
-    // React to other interrupt sources:
-    if (src & MAX30102_INT_PPG_RDY_EN) {
-        // printf("Reacting to PPG Ready Interrupt\r\n");
-    }
-
-    if ((src & MAX30102_INT_A_FULL_EN) && deviceReadyForMeasurement) {
-        // Process n samples in red_samples[0..n-1], ir_samples[0..n-1]
-        // e.g., push into your DSP / DMA pipeline
-
-        uint8_t *curPtr = getCurPtr(&pingpongData);
-        int numSamples = max30102_read_fifoRaw(curPtr, MAX30102_FIFO_LEN);
-        // printf("Reacting to FIFO FULL %d\r\n", numSamples);
-
-        if(numSamples < 0) {
-            reasonCode = READMAX30102_FIFO_ERROR;
-            reasonCodeISR = READMAX30102_FIFO_ERROR;
-            return;
-        }
-
-        //Updated write Pointer and available sample count
-        updatePingPong(&pingpongData, numSamples);
-
-        uint8_t startTempMeasure = 1;
-        ret = updateTempPingPong(startTempMeasure);
-        if(ret != NOERROR) {
-            reasonCode = ret;
-            reasonCodeISR = READMAX30102_FIFO_ERROR;
-            return;
-        }
-    }
-
-    if (src & MAX30102_INT_ALC_OVF_EN) {
-        // Ambient light overflow consider adjusting LED current or placement
-        // printf("Reacting to AMBIENT LIGHT OVERFLOW\r\n");
-    }
-
-    if (src & MAX30102_INT_DIE_TEMP_RDY_EN) {
-        allowedIntMask =
-            MAX30102_INT_A_FULL_EN
-            // |M AX30102_INT_PPG_RDY_EN
-            | MAX30102_INT_ALC_OVF_EN
-            // | MAX30102_INT_PWR_RDY_EN
-            // | MAX30102_INT_DIE_TEMP_RDY_EN
-            ;
-        deviceReadyForMeasurement = 1;
-        uint8_t startTempMeasure = 0;
-        ret = updateTempPingPong(startTempMeasure);
-        if(ret != NOERROR) {
-            reasonCode = ret;
-            reasonCodeISR = READMAX30102_FIFO_ERROR;
-            return;
-        }
-    }
-
-    if (src & MAX30102_INT_PWR_RDY_EN) {
-        printf("Reacting to Power Ready Interrupt\r\n");
-    }
-
-    ret = max30102_enable_interrupts(allowedIntMask);
-}
-
 int main(int argc, char **argv) {
     int prevquant_t = -1;
     uint32_t duration = 10;//Seconds
@@ -210,13 +136,8 @@ int main(int argc, char **argv) {
     // Exception handling:ctrl + c
     signal(SIGINT, terminate);
 
-    i2c_config(i2c_freq);
-    i2c1_init();
-
-    // Attach ISR on GPIO26 falling edge (MAX30102 INT pin)
-    // uses BCM numbering of the GPIOs and directly accesses the GPIO registers.
-    wiringPiSetupGpio();
-    wiringPiISR(MAX30102_INT_PIN, INT_EDGE_FALLING, &max_30102_wiringPiISR);
+    max30102_init();
+    i2c_init(i2c_freq);
 
     printf("MAX30102 ISR attached on GPIO16. Main loop free to run.\n");
 

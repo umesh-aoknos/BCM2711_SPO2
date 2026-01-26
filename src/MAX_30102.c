@@ -1,12 +1,16 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <wiringPi.h>
 #include "MAX_30102.h"
+#include "gpio_utilities.h"
 #include "i2c_utilities.h"
 #include "utilities.h"
 extern int32_t reasonCode;
 extern int32_t reasonCodeInner;
+extern int32_t reasonCodeISR;
 extern uint8_t allowedIntMask;
+extern pingpong_t pingpongData, pingpongTemp;
 
 /* Check PART_ID register (0xFF should be 0x15) [file:1] */
 int max30102_check_id(uint8_t *part_id) {
@@ -54,6 +58,102 @@ int max30102_reset(void) {
     return NOERROR;
 }
 
+/******************************************************************************
+function:   max_30102_isr
+Info:
+    ISR for MAX30102 interrupt following BCM2711_SPO2 nomenclature.
+    Note: ISR cannot terminate. Sets reasonCodeISR for main loop to process.
+******************************************************************************/
+void max_30102_isr(void) {
+//Note ISR Cannot terminate. Needs to return with Code for main loop to process and terminate
+    //Don't set deviceReadyForMeasurement to 1 without updating fwrite for max30102_config_t
+    static uint8_t deviceReadyForMeasurement = 0;
+    uint32_t src;
+
+    int ret = max30102_get_interrupt_source(&src, allowedIntMask);
+    if (ret != NOERROR) {
+        reasonCode = ret;
+        reasonCodeISR = MAX30102_GET_INTERRUPT_SRC_ERROR;
+        return;
+    }
+
+    // React to other interrupt sources:
+    if (src & MAX30102_INT_PPG_RDY_EN) {
+        // printf("Reacting to PPG Ready Interrupt\r\n");
+    }
+
+    if ((src & MAX30102_INT_A_FULL_EN) && deviceReadyForMeasurement) {
+        // Process n samples in red_samples[0..n-1], ir_samples[0..n-1]
+        // e.g., push into your DSP / DMA pipeline
+        
+        uint8_t *curPtr = getCurPtr(&pingpongData);
+        int numSamples = max30102_read_fifoRaw(curPtr, MAX30102_FIFO_LEN);
+
+        if(numSamples < 0) {
+            reasonCode = READMAX30102_FIFO_ERROR;
+            reasonCodeISR = READMAX30102_FIFO_ERROR;
+            return;
+        }
+
+        //Updated write Pointer and available sample count
+        updatePingPong(&pingpongData, numSamples);
+
+        uint8_t startTempMeasure = 1;
+        ret = updateTempPingPong(startTempMeasure);
+        if(ret != NOERROR) {
+            reasonCode = ret;
+            reasonCodeISR = READMAX30102_FIFO_ERROR;
+            return;
+        }
+    }
+
+    if (src & MAX30102_INT_ALC_OVF_EN) {
+        // Ambient light overflow consider adjusting LED current or placement
+        // printf("Reacting to AMBIENT LIGHT OVERFLOW\r\n");
+    }
+
+    if (src & MAX30102_INT_DIE_TEMP_RDY_EN) {
+        allowedIntMask =
+            MAX30102_INT_A_FULL_EN
+            // |M AX30102_INT_PPG_RDY_EN
+            | MAX30102_INT_ALC_OVF_EN
+            // | MAX30102_INT_PWR_RDY_EN
+            // | MAX30102_INT_DIE_TEMP_RDY_EN
+            ;
+
+        deviceReadyForMeasurement = 1;
+        uint8_t startTempMeasure = 0;
+        ret = updateTempPingPong(startTempMeasure);
+        if(ret != NOERROR) {
+            reasonCode = ret;
+            reasonCodeISR = READMAX30102_FIFO_ERROR;
+            return;
+        }
+         printf("Reacting to TEMP\r\n");
+    }
+
+    if (src & MAX30102_INT_PWR_RDY_EN) {
+        printf("Reacting to Power Ready Interrupt\r\n");
+    }
+
+    ret = max30102_enable_interrupts(allowedIntMask);
+}
+
+int max30102_init() {
+    wiringPiSetupGpio();
+    /* Set the SPI0 pins to the Alt 0 function to enable SPI0 access on them */
+    gpio_mode(I2C0_SDA_PIN, GPIO_ALT0); // CE1
+    gpio_mode(I2C0_SCL_PIN, GPIO_ALT0); // CE0
+    gpio_set(MAX30102_INT_PIN, GPIO_IN, GPIO_PULLUP);
+    return NOERROR; // OK
+}
+
+void max30102_end(void) {  
+    /* Set all the SPI0 pins back to input */
+    gpio_mode(I2C0_SDA_PIN, GPIO_IN); // CE1
+    gpio_mode(I2C0_SCL_PIN, GPIO_IN); // CE0
+}
+
 /* Configure a sane SpO2 mode default:
  * - FIFO averaged 4 samples, rollover enabled, A_FULL = 0
  * - HR mode, RED led only
@@ -71,6 +171,9 @@ int max30102_init_spo2_default(max30102_config_t config) {
         terminate(MAX30102_RESET_ERROR);
     }
 
+    //For some reason calling after FIFO_CONFIG causes Interrupts to not trigger
+    wiringPiISR(MAX30102_INT_PIN, INT_EDGE_FALLING, &max_30102_isr);
+
     /* FIFO: 4x averaging, rollover enabled, interrupt when full */
     regValue[0] = (config.sample_avg << 5) | (config.fifo_rollover_en << 4) | (config.fifo_full_trigger);
     /* Enable SpO2 mode */
@@ -84,17 +187,6 @@ int max30102_init_spo2_default(max30102_config_t config) {
         reasonCode = ret;
         terminate(REG_FIFO_CONFIG_WRITE_ERROR);
     }
-
-#if 0
-    //No need to clear as reset already clears the FIFOs
-    // Clear FIFO pointers
-    // Some bug here are as clearing FIFOs causes problems
-    ret = max30102_fifo_clear();
-    if (ret != NOERROR) {
-        reasonCode = ret;
-        terminate(ret);
-    }
-#endif
 
     /* LED currents: ~35mA each */
     regValue[0] = config.redled_current;
@@ -263,20 +355,20 @@ int max30102_reg_write(uint8_t reg, const uint8_t *data, uint16_t len) {
         buf[1 + i] = data[i];
 
     // I2C_ADDR_WRITE is 0x57 per datasheet
-    return i2c1_write(MAX30102_I2C_ADDR  , buf, 1 + len);
+    return i2c_write(MAX30102_I2C_ADDR  , buf, 1 + len);
 }
 
 // Read 'len' bytes starting at MAX30102 register 'reg'
 int max30102_reg_read(uint8_t reg, uint8_t *data, uint16_t len) {
     int ret;
 
-    ret = i2c1_write(MAX30102_I2C_ADDR, &reg, 1);
+    ret = i2c_write(MAX30102_I2C_ADDR, &reg, 1);
     if (ret != NOERROR) {
         return ret;
     }
 
     // Read bytes from that register (read phase)
-    ret = i2c1_read(MAX30102_I2C_ADDR, data, len);
+    ret = i2c_read(MAX30102_I2C_ADDR, data, len);
     return ret;
 }
 
@@ -481,7 +573,6 @@ int max30102_get_interrupt_source(uint32_t *src_mask, uint8_t disableIntMask) {
         }
     }
 
-
     *src_mask = mask;
     return NOERROR;
 }
@@ -510,10 +601,7 @@ int max30102_read_fifoRaw(uint8_t *sampleBuffer, int max_samples) {
     int available = (arrayReadWritePtrs[0] - arrayReadWritePtrs[2] + MAX30102_FIFO_LEN) % MAX30102_FIFO_LEN;
 
     if (available == 0) {
-        reasonCode = NOERROR;
-        reasonCodeInner = NOERROR;
         available = 32;
-        // return 0;
     }
 
     if (available > max_samples) {
@@ -532,6 +620,7 @@ int max30102_read_fifoRaw(uint8_t *sampleBuffer, int max_samples) {
     reasonCodeInner = NOERROR;
     return available;
 }
+
 // Read up to 'max_samples' from FIFO when PPG_RDY interrupt is present.
 // Returns: >0 = number of samples read, 0 = no PPG interrupt, <0 = error.
 int max30102_read_all_fifo_if_ppg_ready(uint32_t int_src_mask,

@@ -1,5 +1,5 @@
 function parsedValue = MAX30102GetConfig(val, field)
-    GlobalDefines
+    GlobalDefinitions
     switch (field)
         case VERSION
             if(val == 0xFFFF)

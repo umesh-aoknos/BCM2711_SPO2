@@ -69,17 +69,8 @@
 #define MEM(m, a) MEM_BUS_ADDR(m, a)
 #define CBS(n) MEM_BUS_ADDR(mp, &dp->cbs[(n)])
 
-// DMA base address channel 0 to 14
-#define DMA_BASE        0x007000
-// Clock registers and values
-#define CLK_BASE        0x101000
-// PWM controller registers
-#define PWM_BASE        0x20C000
 // Location of peripheral registers in bus memory
 #define BUS_REG_BASE    0x7E000000
-
-// Microsecond timer definitions
-#define USEC_BASE (PHYS_REG_BASE + 0x3000)
 
 // Get bus address of register
 #define REG_BUS_ADDR(m, x)  ((uint32_t)(m.bus)  + (uint32_t)(x))

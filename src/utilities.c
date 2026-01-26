@@ -15,6 +15,8 @@ extern pingpong_t pingpongData, pingpongTemp;
 extern int32_t reasonCode;
 extern int32_t reasonCodeISR;
 extern int32_t reasonCodeInner;
+extern int minReadTimeout;
+extern int minWriteTimeout;
 
 BCM2711_i2c_clockfreq_t intToI2CFreq(long intArg) {
     BCM2711_i2c_clockfreq_t i2c_freq = I2C_10KHz;
@@ -250,7 +252,7 @@ void terminate(int err) {
     //Shut Down MAX 30102
     max30102_set_bits(MAX30102_REG_MODE_CONFIG, MAX30102_MODE_SHDN);
 
-    i2c_end();
+    max30102_end();
     printf("i2C GPIO Stopped\r\n");
 
     unmap_periph_mem(&vc_mem);
@@ -281,7 +283,7 @@ void terminate(int err) {
         fpTemp = NULL;
     }
 
-    printf("pingpong flushed and fpData/fpTemp closed. Exiting\r\n");
+    printf("pingpong flushed and fpData/fpTemp closed. I2C Max Read Timeout %d. I2C Max Write Timeout %d. Exiting\r\n", I2C_TIMEOUT - minReadTimeout, I2C_TIMEOUT - minWriteTimeout);
 
     exit(0);
 }
@@ -294,6 +296,7 @@ int updateTempPingPong(uint8_t startTempMeasure) {
             return REG_TEMP_INT_READ_ERROR;
         }
 
+        //Print the first temp
         if(startTempMeasure == 0) {
             float temp = *curTempPtr + ((*(curTempPtr + 1))*0.0625f);
             printf("Got Temp Interrupt and Temp Data %d,%d, %5.2f\r\n", *curTempPtr, *(curTempPtr + 1), temp);

@@ -2,9 +2,7 @@
 #include <unistd.h>
 #include "gpio_utilities.h"
 #include "mem_map.h"
-#include <pthread.h>
 
-#define GPIO_DEBUG
 
 extern MEM_MAP gpio_regs;
 

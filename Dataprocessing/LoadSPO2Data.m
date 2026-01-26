@@ -1,4 +1,4 @@
-function [irLED, redLED, Temp, config] = LoadSPO2Data(FileName, sensorPlacement, saveTextFlag)
+function [irLED, redLED, Temp, setup, adcInfo, dacInfo, ppgConfig] = LoadSPO2Data(FileName, sensorPlacement, saveTextFlag)
     if(nargin == 1)
         sensorPlacement = "L FF";
         saveTextFlag = 0;
@@ -6,46 +6,45 @@ function [irLED, redLED, Temp, config] = LoadSPO2Data(FileName, sensorPlacement,
         saveTextFlag = 0;
     end
 
-    FileName
-    TempFileName = strrep(FileName, 'Data', 'Temp')
-
-    GlobalDefines
-    fid = fopen(FileName, "r")
-    fidTemp = fopen(TempFileName, "r")
-
-    %%Read Config
-    config = struct(); % Initialize an empty structure
-    % Read the config fields
-    config.version = MAX30102GetConfig(fread(fid, 1, 'uint16'), VERSION);
-    if((config.version  < 32769)) % If version is negative, it's old format
-        fseek(fid, 0, 'bof'); 
-        config.version = 0;
-    else
-        config.version = config.version - 32768;
-        config.i2c_freq = MAX30102GetConfig(fread(fid, 1, 'uint16'), I2C_FREQ);
+    [dirName, baseName, extn] = fileparts(FileName);
+    if(length(dirName) == 0)
+        dirName = '.';
     end
-    config.sample_avg = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_AVG);
-    config.fifo_rollover_en = MAX30102GetConfig(fread(fid, 1, 'uint8'), ROLLOVER_EN);
-    config.fifo_full_trigger = MAX30102GetConfig(fread(fid, 1, 'uint8'), FIFO_FULL_TRIGGER);
-    config.sample_rate = MAX30102GetConfig(fread(fid, 1, 'uint8'), SAMPLE_RATE);
-    config.pulse_width = MAX30102GetConfig(fread(fid, 1, 'uint8'), ADC_RES);
-    config.adc_range = MAX30102GetConfig(fread(fid, 1, 'uint8'),ADC_RANGE);
-    config.slot1 = MAX30102GetConfig(fread(fid, 1, 'uint8'), SLOT1_ASSIGN);
-    config.slot2 = MAX30102GetConfig(fread(fid, 1, 'uint8'), SLOT2_ASSIGN);
-    config.slot3 = MAX30102GetConfig(fread(fid, 1, 'uint8'), SLOT3_ASSIGN);
-    config.slot4 = MAX30102GetConfig(fread(fid, 1, 'uint8'), SLOT4_ASSIGN);
-    config.redled_current = MAX30102GetConfig(fread(fid, 1, 'uint8'), REDLED_CUR);
-    config.irled_current = MAX30102GetConfig(fread(fid, 1, 'uint8'), IRLED_CUR);
-    config.mode = MAX30102GetConfig(fread(fid, 1, 'uint8'), MODE);
-    config.sensorPlacement = sensorPlacement;
-    switch(config.version)
+
+    if(strfind(baseName, 'PPG'))
+        TempFileName = strrep(baseName, 'PPG', 'Temp');
+        TempFileName = strcat(dirName,'/',TempFileName, extn);
+
+        DescFileName = strrep(baseName, 'PPG', 'desc');
+        DescFileName = strcat(dirName,'/',DescFileName, '.json');
+    else
+        TempFileName = strrep(baseName, 'Data', 'Temp');
+        TempFileName = strcat(dirName,'/',TempFileName, extn);
+
+        DescFileName = '';
+    end
+
+    GlobalDefinitions
+
+    if(length(DescFileName) == 0)
+        [setup, adcInfo, dacInfo, ppgConfig] = LoadSessionInfoFromData(FileName, sensorPlacement);
+    else
+        [setup, adcInfo, dacInfo, ppgConfig] = LoadSessionInfoFromJSON(DescFileName);
+    end
+
+    fid = fopen(FileName, "r");
+    skipBytes = 0;
+
+    switch(setup.version)
+        case 0
+            skipBytes = 13;
         case 1
-            % If version is 1. Read dieTemp and then skip 3 bytes for align (24bytes vs 21 bytes of info)
-            dummy = fread(fid, 3, 'uint8');%%Read dummy to align with dieTemp
-            config.dieTemp = fread(fid, 1, 'float');
+            skipBytes = 24;
         case 2
-            % If version is 1. No dieTemp. Skip 3 bytes for align (18bytes vs 17 bytes of info)
-            dummy = fread(fid, 1, 'uint8');%%Read dummy to align PPG Data
+            skipBytes = 18;
+    end
+    if(skipBytes > 0)
+        dummy = fread(fid, skipBytes, 'uint8');%%Read dummy to align with Data Start
     end
 
     %%Read Red/IR Sample Data
@@ -59,8 +58,9 @@ function [irLED, redLED, Temp, config] = LoadSPO2Data(FileName, sensorPlacement,
     fclose(fid);
 
     %%Read Temp
+    fidTemp = fopen(TempFileName, "r");
     if(fidTemp > 0)
-        if(config.version == 2)
+        if(setup.version >= 2)
             rawTempA = fread(fidTemp, Inf, 'uint8');
             N=floor(length(rawTempA)/2);
             rawTempB = reshape(rawTempA(1:N*2),2,[]);

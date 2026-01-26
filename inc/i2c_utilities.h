@@ -53,15 +53,9 @@ typedef enum {
 // ---------- External mapping for BSC1 ----------
 
 // ---------- API ----------
-/* Utility: convert BCM2711_i2c_clockfreq_t to human-readable string */
-void i2c1_clear_status(void);
-void i2c1_init(void);
+void i2c_clear_status(void);
+void i2c_init(BCM2711_i2c_clockfreq_t i2c_freq);
 
-int  i2c1_write(uint8_t addr, const uint8_t *buf, uint16_t len);
-int  i2c1_read (uint8_t addr, uint8_t *buf, uint16_t len);
-
-int  i2c_config(BCM2711_i2c_clockfreq_t i2c_freq);   // configure GPIO pins to ALT0
-void i2c_end(void);     // restore GPIO pins to input
-int max30102_read_chip_id(uint8_t *chip_id);
-void i2c1_add_mapper(void);
+int  i2c_write(uint8_t addr, const uint8_t *buf, uint16_t len);
+int  i2c_read (uint8_t addr, uint8_t *buf, uint16_t len);
 #endif // __I2C_UTILITIES__
