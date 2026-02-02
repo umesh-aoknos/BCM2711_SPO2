@@ -41,7 +41,43 @@ BCM2711_i2c_clockfreq_t intToI2CFreq(long intArg) {
     return i2c_freq;
 }
 
-max30102_sample_rate_t intToSampleRate(long intArg) {
+max30102_pulse_width_t intToSPO2ADCResolution(long intArg) {
+    max30102_pulse_width_t adcRes;
+    if(intArg <= 15) {
+        adcRes = MAX30102_PW_69US_15BIT;
+    }
+    else if(intArg == 16) {
+        adcRes = MAX30102_PW_118US_16BIT;
+    }
+    else if(intArg == 17) {
+        adcRes = MAX30102_PW_215US_17BIT;
+    }
+    else {
+        adcRes = MAX30102_PW_411US_18BIT;
+    }
+
+    return adcRes;
+}
+
+max30102_adc_range_t intToSPO2ADCRange(long intArg) {
+    max30102_adc_range_t adcRange;
+    printf("Range %ld\r\n", intArg);
+    if(intArg < 3072) {
+        adcRange = MAX30102_RGE_2048NA;
+    }
+    else if(intArg < 6144) {
+        adcRange = MAX30102_RGE_4096NA;
+    }
+    else if(intArg < 12288) {
+        adcRange = MAX30102_RGE_8192NA;
+    }
+    else {
+        adcRange = MAX30102_RGE_16384NA;
+    }
+    return adcRange;
+}
+
+max30102_sample_rate_t intToSPO2SampleRate(long intArg) {
     max30102_sample_rate_t fsamp;
     if(intArg < 75) {
         fsamp = MAX30102_SR_50_SPS;

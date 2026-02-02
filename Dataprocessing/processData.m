@@ -24,6 +24,6 @@ function [irLED, redLED, Temp, setup, adcInfo, dacInfo, ppgConfig] = processData
             saveTextFlag = 0;
     end
     [irLED, redLED, Temp, setup, adcInfo, dacInfo, ppgConfig] = LoadSPO2Data(FileName, sensorPlacement, saveTextFlag);
-    skipSamplesDur = 0.25;
+    skipSamplesDur = 0.5;
     analyzeSPO2Data(irLED, redLED, Temp, setup.version, ppgConfig, skipSamplesDur);
 end

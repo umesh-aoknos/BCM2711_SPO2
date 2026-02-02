@@ -69,18 +69,32 @@ int main(int argc, char **argv) {
 
     float irLEDCurrent=25, redLEDCurrent=25; //mA
     max30102_sample_rate_t fsamp = MAX30102_SR_50_SPS;
+    max30102_pulse_width_t adcRes = MAX30102_PW_411US_18BIT;
+    max30102_adc_range_t adcRange = MAX30102_RGE_16384NA;
     BCM2711_i2c_clockfreq_t i2c_freq = I2C_100KHz;
     
     char *endptr;//strtol, strtof error handling
     switch(argc) {
-        case 6:
-            i2c_freq = intToI2CFreq(strtol(argv[5], &endptr, 10));
+        case 8:
+            i2c_freq = intToI2CFreq(strtol(argv[7], &endptr, 10));
             if(errno) {
                 printf("Error reading i2c_freq: %s\r\n", strerror(errno));
                 terminate(ARGCREADERROR);
             }
+        case 7:
+            adcRange = intToSPO2ADCRange(strtol(argv[6], &endptr, 10));
+            if(errno) {
+                printf("Error reading adcRange: %s\r\n", strerror(errno));
+                terminate(ARGCREADERROR);
+            }
+        case 6:
+            adcRes = intToSPO2ADCResolution(strtol(argv[5], &endptr, 10));
+            if(errno) {
+                printf("Error reading adcRes: %s\r\n", strerror(errno));
+                terminate(ARGCREADERROR);
+            }
         case 5:
-            fsamp = intToSampleRate(strtol(argv[4], &endptr, 10));
+            fsamp = intToSPO2SampleRate(strtol(argv[4], &endptr, 10));
             if(errno) {
                 printf("Error reading fsamp: %s\r\n", strerror(errno));
                 terminate(ARGCREADERROR);
@@ -109,7 +123,7 @@ int main(int argc, char **argv) {
             break;
     }
 
-    printf("Executing Elapsed Time Loop %s %d %3.1f(redLEDCurrent)%d %3.1f(irLEDCurrent)%d fsamp: %s i2c_freq: %s\r\n", argv[0], duration, irLEDCurrent, LEDCURRENT_MA(irLEDCurrent), redLEDCurrent, LEDCURRENT_MA(redLEDCurrent), max30102_sample_rate_to_string(fsamp), BCM2711_i2c_clockfreq_to_string(i2c_freq));
+    printf("Executing %s. Argc %d. Duration %d. redLEDCurrent %3.1f(%d). irLEDCurrent% 3.1f(%d). fsamp: %s, adcRes %s, adcRange %s, i2c_freq: %s\r\n", argv[0], argc, duration, irLEDCurrent, LEDCURRENT_MA(irLEDCurrent), redLEDCurrent, LEDCURRENT_MA(redLEDCurrent), max30102_sample_rate_to_string(fsamp), max30102_adc_resolutuion_to_string(adcRes), max30102_adc_range_to_string(adcRange), BCM2711_i2c_clockfreq_to_string(i2c_freq));
 
     if (!fpData) {
         fpData = fopen(dataFileName, "wb");
@@ -156,8 +170,8 @@ int main(int argc, char **argv) {
         1,
         0x0F,
         fsamp,
-        MAX30102_PW_411US_18BIT,
-        MAX30102_RGE_8192NA,
+        adcRes,
+        adcRange,
         MAX30102_SLOT_RED,
         MAX30102_SLOT_IR,
         MAX30102_SLOT_OFF,

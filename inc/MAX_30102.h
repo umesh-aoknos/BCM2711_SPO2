@@ -46,11 +46,6 @@
 #define MAX30102_SPO2_SR_MASK          0x1C
 #define MAX30102_SPO2_PW_MASK          0x03
 
-/* Useful SPO2 settings: 18-bit, 100sps, full scale 16�A [file:1] */
-#define MAX30102_SPO2_ADC_RGE_16384NA  (0x03 << 5)
-#define MAX30102_SPO2_SR_100_SPS       (0x01 << 2)
-#define MAX30102_LED_PW_411US_18BIT    0x03
-
 /* FIFO_CONFIG bits [file:1] */
 #define MAX30102_FIFO_A_FULL_MASK      0x0F
 #define MAX30102_FIFO_ROLLOVER_EN      0x10
@@ -190,5 +185,7 @@ int max30102_read_all_fifo_if_ppg_ready(uint32_t int_src_mask,
                                         int max_samples);
 int max30102_test_fifo_reread_once(void);
 /* Utility function to convert sample rate enum to string */
+const char* max30102_adc_resolutuion_to_string(max30102_pulse_width_t adcRes);
+const char* max30102_adc_range_to_string(max30102_adc_range_t adcRange);
 const char* max30102_sample_rate_to_string(max30102_sample_rate_t rate);
 #endif /* MAX30102_H */

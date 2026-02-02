@@ -1,4 +1,4 @@
-function [setup, adcInfo, dacInfo, ppgConfig] = LoadSessionInfoFromJSON(descFileJSON)
+function [setup, adcInfo, dacInfo, infoPPG] = LoadSessionInfoFromJSON(descFileJSON)
     GlobalDefinitions
     jsonText = fileread(descFileJSON);
     jsonData = jsondecode(jsonText);
@@ -91,23 +91,23 @@ function [setup, adcInfo, dacInfo, ppgConfig] = LoadSessionInfoFromJSON(descFile
     dacInfo = [dac1Info; dac2Info];
 
     %%PPG Info
-    ppgConfig.i2cFreq = jsonData.ppgConfig.i2cFreq;
-    ppgConfig.sampleAvg = MAX30102GetConfig(jsonData.ppgConfig.sampleAvg, SAMPLE_AVG);
-    ppgConfig.fifoRolloverEn = MAX30102GetConfig(jsonData.ppgConfig.fifoRolloverEn, ROLLOVER_EN);
-    ppgConfig.fifoFullTrigger = MAX30102GetConfig(jsonData.ppgConfig.fifoFullTrigger, FIFO_FULL_TRIGGER);
-    ppgConfig.ppgSampleRate = jsonData.ppgConfig.ppgSampleRate
-    %% ppgConfig.pulseWidth = MAX30102GetConfig(jsonData.ppgConfig.pulseWidth, ADC_RES);
-    ppgConfig.pulseWidth = jsonData.ppgConfig.pulseWidth;
-    ppgConfig.adcRange = MAX30102GetConfig(jsonData.ppgConfig.adcRange, ADC_RANGE);
-    ppgConfig.slot1 = MAX30102GetConfig(jsonData.ppgConfig.slot1, SLOT1_ASSIGN);
-    ppgConfig.slot2 = MAX30102GetConfig(jsonData.ppgConfig.slot2, SLOT2_ASSIGN);
-    ppgConfig.slot3 = MAX30102GetConfig(jsonData.ppgConfig.slot3, SLOT3_ASSIGN);
-    ppgConfig.slot4 = MAX30102GetConfig(jsonData.ppgConfig.slot4, SLOT4_ASSIGN);
-    ppgConfig.redLEDCurrent = MAX30102GetConfig(jsonData.ppgConfig.redLEDCurrent, REDLED_CUR);
-    ppgConfig.irLEDCurrent = MAX30102GetConfig(jsonData.ppgConfig.redLEDCurrent, IRLED_CUR);
-    ppgConfig.mode = MAX30102GetConfig(jsonData.ppgConfig.mode, MODE);
-    ppgConfig.tempSampleRate = jsonData.ppgConfig.tempSampleRate;
-    ppgConfig.sensorPlacement = 'L FF';
-    %% ppgConfig.sensorPlacement = jsonData.ppgConfig.sensorPlacement;
+    infoPPG.i2cFreq = jsonData.infoPPG.i2cFreq;
+    infoPPG.sampleAvg = MAX30102GetConfig(jsonData.infoPPG.sampleAvg, SAMPLE_AVG);
+    infoPPG.fifoRolloverEn = MAX30102GetConfig(jsonData.infoPPG.fifoRolloverEn, ROLLOVER_EN);
+    infoPPG.fifoFullTrigger = MAX30102GetConfig(jsonData.infoPPG.fifoFullTrigger, FIFO_FULL_TRIGGER);
+    infoPPG.ppgSampleRate = jsonData.infoPPG.ppgSampleRate
+    %% infoPPG.pulseWidth = MAX30102GetConfig(jsonData.infoPPG.pulseWidth, ADC_RES);
+    infoPPG.pulseWidth = jsonData.infoPPG.pulseWidth;
+    infoPPG.adcRange = MAX30102GetConfig(jsonData.infoPPG.adcRange, ADC_RANGE);
+    infoPPG.slot1 = MAX30102GetConfig(jsonData.infoPPG.slot1, SLOT1_ASSIGN);
+    infoPPG.slot2 = MAX30102GetConfig(jsonData.infoPPG.slot2, SLOT2_ASSIGN);
+    infoPPG.slot3 = MAX30102GetConfig(jsonData.infoPPG.slot3, SLOT3_ASSIGN);
+    infoPPG.slot4 = MAX30102GetConfig(jsonData.infoPPG.slot4, SLOT4_ASSIGN);
+    infoPPG.redLEDCurrent = jsonData.infoPPG.redLEDCurrent;
+    infoPPG.irLEDCurrent = jsonData.infoPPG.irLEDCurrent;
+    infoPPG.mode = MAX30102GetConfig(jsonData.infoPPG.mode, MODE);
+    infoPPG.tempSampleRate = jsonData.infoPPG.tempSampleRate;
+    infoPPG.sensorPlacement = 'L FF';
+    %% infoPPG.sensorPlacement = jsonData.infoPPG.sensorPlacement;
 end
 

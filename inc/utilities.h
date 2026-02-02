@@ -86,7 +86,9 @@ typedef enum {
     ARGCREADERROR = -56,
 } TerminateError;
 
-max30102_sample_rate_t intToSampleRate(long intArg);
+max30102_pulse_width_t intToSPO2ADCResolution(long intArg);
+max30102_adc_range_t intToSPO2ADCRange(long intArg);
+max30102_sample_rate_t intToSPO2SampleRate(long intArg);
 BCM2711_i2c_clockfreq_t intToI2CFreq(long intArg);
 const char* BCM2711_i2c_clockfreq_to_string(BCM2711_i2c_clockfreq_t freq);
 const char *getErrStr(int err);

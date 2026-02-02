@@ -1,9 +1,9 @@
-function analyzeSPO2Data(irLED, redLED, Temp, version, ppgConfig, skipSamplesDur)
+function analyzeSPO2Data(irLED, redLED, Temp, version, infoPPG, skipSamplesDur)
     if(nargin == 5)
         skipSamplesDur = 0;%%sec
     end
     reflected = 1;
-    fs = ppgConfig.ppgSampleRate;
+    fs = infoPPG.ppgSampleRate;
     ts = 1/fs;
     N = length(irLED);
     t = (0:N-1)*ts;
@@ -27,18 +27,41 @@ function analyzeSPO2Data(irLED, redLED, Temp, version, ppgConfig, skipSamplesDur
     end
     
     figure(1)
-    axfig1 = plotyy(tmod, irLEDmod, tmod, redLEDmod);
-    xlabel('Time');
-    ylabel(axfig1(1), 'IR LED');
-    ylabel(axfig1(2), 'Red LED');
-    legend('IR LED', 'RED LED')
-    if(version == 1)
-        titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, Die Temp=%2.1f(C)",ppgConfig.sensorPlacement, fs,ppgConfig.redLEDCurrent,ppgConfig.redLEDCurrent,ppgConfig.pulseWidth, ppgConfig.dieTemp);
+    if 0
+        axfig1 = plotyy(tmod, irLEDmod, tmod, redLEDmod);
+        xlabel('Time');
+        ylabel(axfig1(1), 'IR LED');
+        ylabel(axfig1(2), 'Red LED');
+        legend('IR LED', 'RED LED')
+        if(version == 1)
+            titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, adc_{range}=%s, Die Temp=%2.1f(C)",infoPPG.sensorPlacement, fs,infoPPG.redLEDCurrent,infoPPG.redLEDCurrent, infoPPG.pulseWidth, infoPPG.adcRange, infoPPG.dieTemp);
+        else
+            titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, adc_{range}=%s.",infoPPG.sensorPlacement, fs,infoPPG.redLEDCurrent,infoPPG.redLEDCurrent,infoPPG.pulseWidth, infoPPG.adcRange);
+        end
+        title(titleStr)
+        grid
     else
-        titleStr = sprintf("Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d.",ppgConfig.sensorPlacement, fs,ppgConfig.redLEDCurrent,ppgConfig.redLEDCurrent,ppgConfig.pulseWidth);
+        subplot(211)
+        plot(tmod, irLEDmod);
+        if(version == 1)
+            titleStr = sprintf("IR LED. Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, adc_{range}=%s, Die Temp=%2.1f(C)",infoPPG.sensorPlacement, fs,infoPPG.redLEDCurrent,infoPPG.redLEDCurrent, infoPPG.pulseWidth, infoPPG.adcRange, infoPPG.dieTemp);
+        else
+            titleStr = sprintf("IR LED. Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, adc_{range}=%s.",infoPPG.sensorPlacement, fs,infoPPG.redLEDCurrent,infoPPG.redLEDCurrent,infoPPG.pulseWidth, infoPPG.adcRange);
+        end
+        title(titleStr)
+        xlabel('Time (seconds)');
+        grid
+        subplot(212)
+        plot(tmod, redLEDmod, 'r');
+        if(version == 1)
+            titleStr = sprintf("RED LED. Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, adc_{range}=%s, Die Temp=%2.1f(C)",infoPPG.sensorPlacement, fs,infoPPG.redLEDCurrent,infoPPG.redLEDCurrent, infoPPG.pulseWidth, infoPPG.adcRange, infoPPG.dieTemp);
+        else
+            titleStr = sprintf("RED LED. Place %s. Config: f_s=%dHz,i_{ir}=%2.1f(ma),i_{red}=%2.1f(ma), adc_{res}=%d, adc_{range}=%s.",infoPPG.sensorPlacement, fs,infoPPG.redLEDCurrent,infoPPG.redLEDCurrent,infoPPG.pulseWidth, infoPPG.adcRange);
+        end
+        title(titleStr)
+        xlabel('Time (seconds)');
+        grid
     end
-    title(titleStr)
-    grid
     
     figure(2)
     NFFT = 1024;

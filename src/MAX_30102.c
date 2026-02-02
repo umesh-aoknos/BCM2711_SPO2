@@ -767,6 +767,38 @@ int max30102_test_fifo_reread_once(void) {
 }
 
 /* Convert sample rate enum to string representation */
+const char* max30102_adc_resolutuion_to_string(max30102_pulse_width_t adcRes) {
+    switch (adcRes) {
+        case MAX30102_PW_69US_15BIT:
+            return "PW 69us 15bits";
+        case MAX30102_PW_118US_16BIT:
+            return "PW 118us 16bits";
+        case MAX30102_PW_215US_17BIT:
+            return "PW 215us 17bits";
+        case MAX30102_PW_411US_18BIT:
+            return "PW 411us 18bits";
+        default:
+            return "Unknown PW and Res";
+    }
+}
+
+/* Convert sample rate enum to string representation */
+const char* max30102_adc_range_to_string(max30102_adc_range_t adcRange) {
+    switch (adcRange) {
+        case MAX30102_RGE_2048NA:
+            return "2048 NA";
+        case MAX30102_RGE_4096NA:
+            return "4096 NA";
+        case MAX30102_RGE_8192NA:
+            return "w81928 NA";
+        case MAX30102_RGE_16384NA:
+            return "16384 NA";
+        default:
+            return "Unknown ADC Range";
+    }
+}
+
+/* Convert sample rate enum to string representation */
 const char* max30102_sample_rate_to_string(max30102_sample_rate_t rate) {
     switch (rate) {
         case MAX30102_SR_50_SPS:
