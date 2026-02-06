@@ -33,3 +33,4 @@ IRLED_CUR = 12;
 MODE = 13;
 VERSION = 14;
 I2C_FREQ = 15;
+PositionsArray = {'LFF', 'LMF', 'LRF','LLF', 'LTF'};

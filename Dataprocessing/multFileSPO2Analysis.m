@@ -1,4 +1,5 @@
 function multFileSPO2Analysis(irLED, redLED, Temp, version, infoPPG, skipSamplesDur, NumFiles, FileIdx)
+    GlobalDefinitions
     if(nargin == 5)
         skipSamplesDur = 0;%%sec
         NumFiles = 1;
@@ -10,6 +11,7 @@ function multFileSPO2Analysis(irLED, redLED, Temp, version, infoPPG, skipSamples
         FileIdx = 1;
     end
 
+    infoPPG.sensorPlacement = PositionsArray{FileIdx};
     NumCols = 3;
     reflected = 1;
     fs = infoPPG.ppgSampleRate;
